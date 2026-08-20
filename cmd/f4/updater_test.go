@@ -372,6 +372,11 @@ func TestUpdater_UserDeclinesUpdate(t *testing.T) {
 	defer func() { AppConfig = oldCfg }()
 	oldDismissed := sessionDismissedUpdateKey
 	defer func() { sessionDismissedUpdateKey = oldDismissed }()
+	// The stub release only carries linux/windows assets; without pinning
+	// the platform the updater finds nothing on darwin and never prompts.
+	origOS, origArch := currentOS, currentArch
+	currentOS, currentArch = "linux", "amd64"
+	defer func() { currentOS, currentArch = origOS, origArch }()
 	sessionDismissedUpdateKey = ""
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -443,6 +448,11 @@ func TestUpdater_ManualCheckIgnoresSessionDismiss(t *testing.T) {
 	defer func() { AppConfig = oldCfg }()
 	oldDismissed := sessionDismissedUpdateKey
 	defer func() { sessionDismissedUpdateKey = oldDismissed }()
+	// The stub release only carries linux/windows assets; without pinning
+	// the platform the updater finds nothing on darwin and never prompts.
+	origOS, origArch := currentOS, currentArch
+	currentOS, currentArch = "linux", "amd64"
+	defer func() { currentOS, currentArch = origOS, origArch }()
 	// Simulate the user having declined the same release earlier.
 	sessionDismissedUpdateKey = "v100.0.0"
 
@@ -495,6 +505,11 @@ func TestUpdater_AutoCheckSkipsSessionDismiss(t *testing.T) {
 	defer func() { AppConfig = oldCfg }()
 	oldDismissed := sessionDismissedUpdateKey
 	defer func() { sessionDismissedUpdateKey = oldDismissed }()
+	// The stub release only carries linux/windows assets; without pinning
+	// the platform the updater finds nothing on darwin and never prompts.
+	origOS, origArch := currentOS, currentArch
+	currentOS, currentArch = "linux", "amd64"
+	defer func() { currentOS, currentArch = origOS, origArch }()
 	sessionDismissedUpdateKey = "v100.0.0"
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

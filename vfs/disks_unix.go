@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -70,7 +71,11 @@ func getPlatformBlockDevices(ctx context.Context) []VFSItem {
 				break
 			}
 			info, err := e.Info()
-			if err == nil && (info.Mode()&os.ModeDevice != 0) {
+			// Block devices only: a character device here is a terminal or
+			// serial port, not a disk — and opening one to probe its size
+			// can block forever (macOS tty.* waits for carrier, and every
+			// Mac ships /dev/tty.Bluetooth-Incoming-Port).
+			if err == nil && info.Mode()&os.ModeDevice != 0 && info.Mode()&os.ModeCharDevice == 0 {
 				items = append(items, VFSItem{
 					Name:      e.Name(),
 					Size:      getDeviceSize("/dev/"+e.Name(), nil),
@@ -102,7 +107,9 @@ func getDeviceSize(devPath string, f *os.File) int64 {
 	}
 	// Direct open seek fallback
 	if f == nil {
-		if localF, err := os.Open(devPath); err == nil {
+		// O_NONBLOCK: never wait for a device to become ready just to
+		// measure it; a probe must not hang on carrier or DTR.
+		if localF, err := os.OpenFile(devPath, os.O_RDONLY|syscall.O_NONBLOCK, 0); err == nil {
 			defer localF.Close()
 			if pos, err := localF.Seek(0, io.SeekEnd); err == nil && pos > 0 {
 				return pos

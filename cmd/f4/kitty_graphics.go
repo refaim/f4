@@ -651,6 +651,10 @@ func kittyReadFile(path string, medium byte, offset, size int) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("the file could not be read")
 	}
+	// The handle must drop before the unlink: Windows keeps a file deleted
+	// while open visible until the last handle closes. (The deferred Close
+	// then returns ErrClosed, which it ignores.)
+	f.Close()
 	// A shared memory object belongs to the terminal once it has been read:
 	// the protocol makes us responsible for the shm_unlink. A t=t file is
 	// the client saying we may have that one too.

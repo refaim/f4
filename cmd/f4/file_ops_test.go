@@ -471,7 +471,15 @@ func TestFileOp_PathLogic(t *testing.T) {
 		// Target: "deep/path/target.txt" (subfolders don't exist)
 		ExecuteFileOp(nil, srcVfs, dstVfs, []string{"source.txt"}, "deep/path/target.txt", false, 2, nil)
 
-		for i := 0; i < 50; i++ {
+		// The copy lands asynchronously; a fixed 250ms budget is not enough
+		// for a loaded CI runner, so pump the queue against a deadline and
+		// stop as soon as the file shows up.
+		finalPath := filepath.Join(tmpSrc, "deep", "path", "target.txt")
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(finalPath); err == nil {
+				break
+			}
 			select {
 			case task := <-vtui.FrameManager.TaskChan:
 				task()
@@ -480,7 +488,6 @@ func TestFileOp_PathLogic(t *testing.T) {
 			}
 		}
 
-		finalPath := filepath.Join(tmpSrc, "deep", "path", "target.txt")
 		if _, err := os.Stat(finalPath); os.IsNotExist(err) {
 			t.Error("Failed to create parent directories during rename-copy")
 		}

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -15,7 +16,16 @@ import (
 )
 
 func newLocalShellCommand(command string) *exec.Cmd {
-	return exec.Command(GetSystemShell(), "/D", "/V:OFF", "/S", "/C", command)
+	shell := GetSystemShell()
+	c := exec.Command(shell)
+	// cmd.exe does not read the MSVCRT backslash-quoting that exec.Command
+	// applies to arguments, so an embedded quote arrives as \" and breaks
+	// the command. Hand cmd the raw line; /S makes it strip exactly the
+	// outer quote pair around the /C payload.
+	c.SysProcAttr = &syscall.SysProcAttr{
+		CmdLine: fmt.Sprintf(`"%s" /D /V:OFF /S /C "%s"`, shell, command),
+	}
+	return c
 }
 
 func localCommandDialect() vfs.CommandDialect { return vfs.CommandDialectCmd }
@@ -37,7 +47,13 @@ func normalizeCommandOutput(line []byte) string {
 }
 
 func configureLocalProcessTree(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
+	// newLocalShellCommand already installed a SysProcAttr carrying the raw
+	// cmd.exe command line; replacing the whole struct here silently dropped
+	// it, leaving a bare cmd.exe that read EOF and exited 0.
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.CreationFlags |= windows.CREATE_NEW_PROCESS_GROUP
 }
 
 func attachLocalProcessTree(cmd *exec.Cmd) localProcessTree {

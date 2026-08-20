@@ -714,7 +714,7 @@ type ArkScore struct {
 var ArkHighScores []ArkScore
 
 func loadArkScores() {
-	cfgDir, _ := os.UserConfigDir()
+	cfgDir, _ := userConfigDir()
 	p := filepath.Join(cfgDir, "f4", "ark_scores.json")
 	data, err := os.ReadFile(p)
 	if err == nil {
@@ -723,7 +723,7 @@ func loadArkScores() {
 }
 
 func saveArkScores() {
-	cfgDir, _ := os.UserConfigDir()
+	cfgDir, _ := userConfigDir()
 	p := filepath.Join(cfgDir, "f4", "ark_scores.json")
 	os.MkdirAll(filepath.Dir(p), 0755)
 	data, _ := json.MarshalIndent(ArkHighScores, "", "  ")

@@ -420,7 +420,10 @@ func TestPanelsFrame_SelectionByMask(t *testing.T) {
 }
 func TestPanelsFrame_DriveMenuListsAssignedBookmarks(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", cfg)
+	// os.UserConfigDir ignores XDG_CONFIG_HOME on darwin; go through the seam.
+	oldUserConfigDir := userConfigDir
+	userConfigDir = func() (string, error) { return cfg, nil }
+	t.Cleanup(func() { userConfigDir = oldUserConfigDir })
 	if err := os.MkdirAll(filepath.Join(cfg, "f4", "settings"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +542,10 @@ func bookmarkRow(t *testing.T, menu *vtui.VMenu) int {
 
 func TestPanelsFrame_DriveMenuBookmarkKeys(t *testing.T) {
 	cfg := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", cfg)
+	// os.UserConfigDir ignores XDG_CONFIG_HOME on darwin; go through the seam.
+	oldUserConfigDir := userConfigDir
+	userConfigDir = func() (string, error) { return cfg, nil }
+	t.Cleanup(func() { userConfigDir = oldUserConfigDir })
 	if err := os.MkdirAll(filepath.Join(cfg, "f4", "settings"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -3262,10 +3268,9 @@ func TestPanelsFrame_CopyShortcuts(t *testing.T) {
 		Type: vtinput.KeyEventType, KeyDown: true,
 		VirtualKeyCode: 'F', ControlKeyState: vtinput.LeftCtrlPressed,
 	})
+	// A path without spaces or cmd metacharacters is inserted bare on every
+	// platform; backslashes are Windows path separators, not a reason to quote.
 	expectedCommand := expectedPath
-	if runtime.GOOS == "windows" {
-		expectedCommand = `"` + expectedPath + `"`
-	}
 	if got := pf.cmdLine.Edit.GetText(); got != expectedCommand {
 		t.Fatalf("Ctrl+F failed: expected command line %q, got %q", expectedCommand, got)
 	}
@@ -3623,6 +3628,30 @@ func TestPanelsFrame_PromptTruncation(t *testing.T) {
 
 		if !found {
 			t.Errorf("Short path was lost in prompt: %q", promptStr)
+		}
+	})
+
+	t.Run("Extreme Long Hostname Truncation", func(t *testing.T) {
+		oldHostname := osHostname
+		osHostname = func() (string, error) {
+			return "sjc20-bb714-b90e13a3-e1f2-4dc9-95b6-3e55cc291be4-4E177BE7E70B.local", nil
+		}
+		defer func() { osHostname = oldHostname }()
+
+		fsp.vfs = vfs.NewNullVFS(0)
+		fsp.vfs.SetPath(filepath.FromSlash("/very/long/directory/path/that/exceeds/the/limit/of/forty/characters"))
+		prompt := pf.buildPrompt()
+
+		visibleLen := 0
+		promptStr := ""
+		for _, c := range prompt {
+			if c.Char != vtui.WideCharFiller {
+				visibleLen++
+				promptStr += string(rune(c.Char))
+			}
+		}
+		if visibleLen > 45 {
+			t.Errorf("Prompt too long with long hostname: %d chars (%q)", visibleLen, promptStr)
 		}
 	})
 

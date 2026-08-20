@@ -16,11 +16,20 @@ import (
 func TestLocalCommandRunnerWindowsStreamsMergedLinesAndExitStatus(t *testing.T) {
 	t.Setenv("COMSPEC", "cmd.exe")
 	dir := t.TempDir()
+
+	// Minimal probe first: if plain exit-code propagation is broken, the
+	// compound assertions below only obscure it.
+	probeCode, probeErr := NewLocalCommandRunner().RunCommand(
+		context.Background(), dir, `exit 5`, func(string) {})
+	if probeErr != nil || probeCode != 5 {
+		t.Fatalf("probe: exit code = %d, err = %v, want 5, nil", probeCode, probeErr)
+	}
+
 	var got []string
 	code, err := NewLocalCommandRunner().RunCommand(
 		context.Background(),
 		dir,
-		`cd & (set /p F4_TEST_INPUT= || echo stdin-eof) & echo stderr-line 1>&2 & <nul set /p "=partial" & exit /b 7`,
+		`cd & (set /p F4_TEST_INPUT= || echo stdin-eof) & 1>&2 echo stderr-line& <nul set /p "=partial" & exit 7`,
 		func(line string) { got = append(got, line) },
 	)
 	if err != nil {

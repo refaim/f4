@@ -2,6 +2,7 @@ package vfs
 
 import (
 	"context"
+	"github.com/unxed/f4/vfs/hostmode"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,7 @@ func TestTrailingDotsSupport(t *testing.T) {
 
 	// 1. Test Directory with trailing dot
 	dotDirPath := filepath.Join(tempDir, "folder.")
+	t.Logf("diag: hostmode.Posix=%v prepareOSPath=%q", hostmode.Posix(), prepareOSPath(dotDirPath))
 	err := vfs.MkDir(ctx, dotDirPath)
 	if err != nil {
 		t.Fatalf("Failed to MkDir with trailing dot: %v", err)

@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -136,10 +135,9 @@ func TestAction_PanelInsertPath_CursorOnFile(t *testing.T) {
 		t.Fatal("Panel.InsertPath did not run")
 	}
 	path := filepath.Join(tmp, "a.txt")
+	// A path without spaces or cmd metacharacters is inserted bare on every
+	// platform; backslashes are Windows path separators, not a reason to quote.
 	want := "echo " + path
-	if runtime.GOOS == "windows" {
-		want = `echo "` + path + `"`
-	}
 	if got := pf.cmdLine.Edit.GetText(); got != want {
 		t.Errorf("command line = %q, want %q", got, want)
 	}

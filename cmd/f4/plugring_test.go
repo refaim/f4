@@ -125,9 +125,11 @@ func TestFetchCatalog_Dependencies(t *testing.T) {
 }
 func TestGetInstalledPlugRingItems(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	os.Setenv("APPDATA", tmpDir)
+	oldUserConfigDir := userConfigDir
+	userConfigDir = func() (string, error) { return tmpDir, nil }
+	t.Cleanup(func() { userConfigDir = oldUserConfigDir })
 	resetConfigDirForTest()
+	t.Cleanup(resetConfigDirForTest)
 
 	cfgDir := GetF4ConfigDir()
 	plugringDir := filepath.Join(cfgDir, "plugring")
@@ -149,9 +151,11 @@ func TestCheckForPluginUpdates(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 
 	tmpDir := t.TempDir()
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	os.Setenv("APPDATA", tmpDir)
+	oldUserConfigDir := userConfigDir
+	userConfigDir = func() (string, error) { return tmpDir, nil }
+	t.Cleanup(func() { userConfigDir = oldUserConfigDir })
 	resetConfigDirForTest()
+	t.Cleanup(resetConfigDirForTest)
 
 	cfgDir := GetF4ConfigDir()
 	plugringDir := filepath.Join(cfgDir, "plugring")

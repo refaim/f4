@@ -36,7 +36,7 @@ type BookmarkSet [10]Bookmark
 // ~/.config/far2l/settings/bookmarks.ini and the f4 directory without
 // renaming.
 func BookmarksFilePath() string {
-	configDir, _ := os.UserConfigDir()
+	configDir, _ := userConfigDir()
 	return filepath.Join(configDir, "f4", "settings", "bookmarks.ini")
 }
 

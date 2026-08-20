@@ -122,7 +122,9 @@ func mockSudoDispatcher(t *testing.T, l *net.UnixListener, stop chan struct{}) {
 }
 
 func TestSudoClient_IPCProtocol(t *testing.T) {
-	tmpDir := t.TempDir()
+	// Not t.TempDir(): on macOS its path is long enough to overflow
+	// sun_path (~104 bytes) and bind fails with EINVAL.
+	tmpDir := shortSocketDir(t)
 	sockPath := filepath.Join(tmpDir, "sudo-test.sock")
 
 	addr, err := net.ResolveUnixAddr("unix", sockPath)
@@ -239,7 +241,7 @@ func TestSudoClient_IPCProtocol(t *testing.T) {
 }
 
 func TestSudoClient_DisconnectRecovery(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmpDir := shortSocketDir(t)
 	sockPath := filepath.Join(tmpDir, "sudo-recovery.sock")
 
 	addr, _ := net.ResolveUnixAddr("unix", sockPath)
@@ -281,4 +283,17 @@ func TestSudoClient_DisconnectRecovery(t *testing.T) {
 	if client.conn != nil {
 		t.Error("Expected client.conn to be set to nil after sendMsg failure")
 	}
+}
+
+// shortSocketDir returns a freshly created directory with a path short
+// enough for a unix socket: t.TempDir() on macOS easily exceeds the
+// ~104-byte sun_path limit and bind(2) fails with EINVAL.
+func shortSocketDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "f4sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return dir
 }

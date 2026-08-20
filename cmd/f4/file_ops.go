@@ -1081,6 +1081,29 @@ func tryOptimizedRename(ctx context.Context, srcVFS, dstVFS vfs.VFS, srcPath, ds
 	return true, nil
 }
 
+// resolveSymlinksForCompare resolves symlinks in the longest existing
+// ancestor of p and re-appends the not-yet-existing remainder. A plain
+// EvalSymlinks fails on a destination that does not exist yet, leaving it
+// unresolved while the source IS resolved — and the copy-into-itself
+// prefix check then compares paths from two different namespaces. On macOS
+// every TempDir sits behind the /var -> /private/var symlink, so that
+// asymmetry made the protection miss and recursion ran until
+// ENAMETOOLONG.
+func resolveSymlinksForCompare(p string) string {
+	remainder := ""
+	for cur := p; ; {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(resolved, remainder)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p
+		}
+		remainder = filepath.Join(filepath.Base(cur), remainder)
+		cur = parent
+	}
+}
+
 func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs vfs.VFS, destPath string, state *FileOpState, depth int) (resultErr error) {
 	if depth > 1000 {
 		return fmt.Errorf("maximum recursion depth exceeded (circular structure?)")
@@ -1103,14 +1126,10 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 	_, srcIsOS := srcVfs.(*vfs.OSVFS)
 	_, dstIsOS := dstVfs.(*vfs.OSVFS)
 	if srcIsOS {
-		if resolved, err := filepath.EvalSymlinks(absSrc); err == nil {
-			realSrc = resolved
-		}
+		realSrc = resolveSymlinksForCompare(absSrc)
 	}
 	if dstIsOS {
-		if resolved, err := filepath.EvalSymlinks(absDst); err == nil {
-			realDst = resolved
-		}
+		realDst = resolveSymlinksForCompare(absDst)
 	}
 
 	cleanSrc, srcIsURI := normalizedURIIdentity(realSrc)

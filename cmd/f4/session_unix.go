@@ -448,9 +448,15 @@ func runServer(sockPath string) {
 				case <-watchStop:
 					return
 				case <-ticker.C:
+					// POLLOUT/POLLIN must be requested explicitly: Linux
+					// reports POLLERR/POLLHUP even for an empty event mask,
+					// but macOS reports nothing, leaving a dead client
+					// undetected forever. The masks below only test
+					// error/hangup bits, so a healthy writable pipe or
+					// readable stdin never trips them.
 					pfds := []unix.PollFd{
-						{Fd: int32(pipeWriteFD), Events: 0},
-						{Fd: int32(inFD), Events: 0},
+						{Fd: int32(pipeWriteFD), Events: unix.POLLOUT},
+						{Fd: int32(inFD), Events: unix.POLLIN},
 					}
 					_, err := unix.Poll(pfds, 0)
 					if err == nil {

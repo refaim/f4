@@ -48,10 +48,18 @@ func TestMain(m *testing.M) {
 	defaultExternalUICommandRunner = func(string, []string, string) error { return nil }
 	defaultNativePropertiesOpener = func(string) error { return nil }
 
+	// Frames must not fork the user's shell during unit tests; the few
+	// tests that exercise the PTY path construct one explicitly.
+	spawnLocalShellPTY = false
+
 	tmpDir, err := os.MkdirTemp("", "f4-test-config-*")
 	if err == nil {
+		// XDG_CONFIG_HOME/APPDATA cover Linux and Windows; os.UserConfigDir
+		// ignores both on darwin, so the seam is what actually isolates the
+		// suite from the developer's real profile there.
 		os.Setenv("XDG_CONFIG_HOME", tmpDir)
 		os.Setenv("APPDATA", tmpDir)
+		userConfigDir = func() (string, error) { return tmpDir, nil }
 		resetConfigDirForTest()
 	}
 

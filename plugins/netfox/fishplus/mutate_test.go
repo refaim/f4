@@ -229,7 +229,9 @@ func TestChtimesOnSimulatedBSDHost(t *testing.T) {
 	bin := t.TempDir()
 	stubs := map[string]string{
 		"touch": "#!/bin/sh\nfor a in \"$@\"; do\n case $a in -d) exit 1 ;; esac\ndone\nexec " + realTouch + " \"$@\"\n",
-		"date":  "#!/bin/sh\ncase $1 in\n -r) shift; e=$1; shift; exec " + realDate + " -d \"@$e\" \"$@\" ;;\n -d) exit 1 ;;\nesac\nexec " + realDate + " \"$@\"\n",
+		// The -r branch must not assume a GNU date underneath: on macOS the
+		// real date is BSD, where the epoch spelling is -r, not -d @epoch.
+		"date": "#!/bin/sh\ncase $1 in\n -r) shift; e=$1; shift\n  out=`" + realDate + " -d \"@$e\" \"$@\" 2>/dev/null` || out=`" + realDate + " -r \"$e\" \"$@\" 2>/dev/null`\n  [ -n \"$out\" ] || exit 1\n  echo \"$out\"; exit 0 ;;\n -d) exit 1 ;;\nesac\nexec " + realDate + " \"$@\"\n",
 	}
 	for name, body := range stubs {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0755); err != nil {

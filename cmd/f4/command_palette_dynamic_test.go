@@ -521,8 +521,9 @@ func TestCommandPaletteIndexesPanelContextAndPlatformDriveCommands(t *testing.T)
 
 func TestCommandPaletteBookmarksRejectPluginOnlyAndStalePanelTargets(t *testing.T) {
 	configRoot := t.TempDir()
-	t.Setenv("APPDATA", configRoot)
-	t.Setenv("XDG_CONFIG_HOME", configRoot)
+	oldUserConfigDir := userConfigDir
+	userConfigDir = func() (string, error) { return configRoot, nil }
+	t.Cleanup(func() { userConfigDir = oldUserConfigDir })
 
 	bookmarks := BookmarkSet{}
 	bookmarks[1] = Bookmark{Plugin: "legacy-plugin", PluginData: "opaque"}

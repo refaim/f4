@@ -137,7 +137,13 @@ func (pf *PanelsFrame) addCommandHistory(cmd string) {
 }
 func (pf *PanelsFrame) insertPathToCmdLine(path string) {
 	if path != "" {
-		if strings.ContainsAny(path, " &|;<>()$`\\\"'") {
+		special := " &|;<>()$`\\\"'"
+		if runtime.GOOS == "windows" {
+			// Backslash is the path separator there, not an escape
+			// character; with it in the set every single path got quoted.
+			special = " &|;<>()^\"'"
+		}
+		if strings.ContainsAny(path, special) {
 			if runtime.GOOS == "windows" {
 				if !strings.HasPrefix(path, "\"") {
 					path = "\"" + path + "\""
@@ -774,6 +780,10 @@ func (pf *PanelsFrame) updateMenuCheckmarks() {
 	}
 }
 
+// osHostname is os.Hostname behind a seam so prompt tests can pin a value:
+// real hostnames range from "mac" to a CI runner's 60-character UUID soup.
+var osHostname = os.Hostname
+
 func (pf *PanelsFrame) buildPrompt() []vtui.CharInfo {
 	var path string
 	var vfsTitle string
@@ -800,7 +810,7 @@ func (pf *PanelsFrame) buildPrompt() []vtui.CharInfo {
 		home = usr.HomeDir
 	}
 
-	host, _ := os.Hostname()
+	host, _ := osHostname()
 	if host == "" {
 		host = "localhost"
 	}
@@ -839,6 +849,13 @@ func (pf *PanelsFrame) buildPrompt() []vtui.CharInfo {
 	}
 	if maxPromptLen < 15 {
 		maxPromptLen = 15
+	}
+
+	// The user@host prefix gets at most half the budget: a long hostname
+	// (CI runners, corporate DHCP names) otherwise pushes the prompt past
+	// maxPromptLen no matter how hard the path is truncated.
+	if maxUserHost := maxPromptLen / 2; runewidth.StringWidth(userHostStr) > maxUserHost {
+		userHostStr = vtui.TruncateMiddle(userHostStr, maxUserHost)
 	}
 
 	maxPathLen := maxPromptLen - runewidth.StringWidth(userHostStr) - runewidth.StringWidth(sepStr) - runewidth.StringWidth(suffixStr)
@@ -894,9 +911,19 @@ func (pf *PanelsFrame) takeLocalPTY() PtyBackend {
 	return pty
 }
 
+// spawnLocalShellPTY gates initPTY's fork of the user's shell. Tests turn
+// it off in TestMain: 185 frames spawned per test run each forked a real
+// shell, and the leaked ptys exhausted macOS's ptmx_max (511), killing
+// unrelated PTY tests with ENXIO ("device not configured").
+var spawnLocalShellPTY = true
+
 func (pf *PanelsFrame) initPTY() {
 	// Always initialize the parser to prevent nil dereference
 	pf.parser = NewAnsiParser(pf.termView, nil)
+
+	if !spawnLocalShellPTY {
+		return
+	}
 
 	go func() {
 		pf.ptyMutex.Lock()

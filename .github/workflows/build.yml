@@ -73,16 +73,6 @@ jobs:
           cmd/f4/rsrc_windows_amd64.syso \
           cmd/f4/rsrc_windows_arm64.syso
 
-    - name: Run Tests
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64' || (matrix.goos == 'windows' && matrix.goarch == 'amd64')
-      run: |
-        echo "Running f4 core tests..."
-        go test -v -skip '^TestAllDialogs_LayoutValidation$' ./...
-        # Layout validation mutates shared UI registries from parallel
-        # subtests. Go 1.26 schedules them aggressively enough to expose the
-        # upstream race, so isolate that test in a single-threaded process.
-        GOMAXPROCS=1 go test -v -run '^TestAllDialogs_LayoutValidation$' ./cmd/f4
-
     - name: Build binaries
       env:
         GOOS: ${{ matrix.goos }}
@@ -339,9 +329,54 @@ jobs:
         retention-days: 7
 
   # Эта джоба создает постоянные релизы при пуше тэгов v*.*.*
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      CGO_ENABLED: 0
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.26.x'
+        cache-dependency-path: go.sum
+
+    - name: Run Tests
+      shell: bash
+      run: |
+        go test -timeout 15m -skip '^TestAllDialogs_LayoutValidation$' ./...
+        # Layout validation mutates shared UI registries from parallel
+        # subtests. Go 1.26 schedules them aggressively enough to expose the
+        # upstream race, so isolate that test in a single-threaded process.
+        GOMAXPROCS=1 go test -timeout 15m -run '^TestAllDialogs_LayoutValidation$' ./cmd/f4
+
+    - name: Dump crash reports on failure
+      if: failure()
+      shell: bash
+      run: |
+        # A crash handler that os.Exit()s bypasses both go test's output and
+        # TestMain's temp-dir cleanup, so the reports it wrote survive here.
+        for base in "${TMPDIR:-/tmp}" "$(cygpath -u "${TEMP:-}" 2>/dev/null)"; do
+          [ -n "$base" ] && [ -d "$base" ] || continue
+          find "$base" -maxdepth 4 -path '*f4-test-config*' -name '*.log' 2>/dev/null | head -20 | while read -r f; do
+            echo "=== $f ==="
+            cat "$f"
+          done
+        done
+
   release:
     name: Create Official Release
-    needs: [build, build-win7]
+    needs: [build, build-win7, test]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -444,7 +479,7 @@ jobs:
   # Эта джоба обновляет "плавающий" nightly релиз при каждом пуше в main
   nightly:
     name: Update Nightly Release
-    needs: [build, build-win7]
+    needs: [build, build-win7, test]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:

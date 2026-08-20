@@ -46,7 +46,10 @@ func TestFileStateKey_RemoteDoesNotCollideWithLocal(t *testing.T) {
 	if localKey == remoteKey {
 		t.Fatalf("a remote file and its local namesake share the key %q", localKey)
 	}
-	if want := "user@host:/etc/hosts"; remoteKey != want {
+	// Abs rewrites the path per-platform (drive letter and backslashes on
+	// Windows), so derive the expectation instead of hardcoding the unix shape.
+	absPath, _ := local.Abs("/etc/hosts")
+	if want := "user@host:" + absPath; remoteKey != want {
 		t.Fatalf("remote key = %q, want %q", remoteKey, want)
 	}
 }

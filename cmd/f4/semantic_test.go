@@ -156,6 +156,9 @@ func TestSemantic_ViewerViewActions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create viewer: %v", err)
 	}
+	// The viewer holds the file open; without this Close Windows cannot
+	// delete it during TempDir cleanup.
+	defer viewer.Close()
 
 	// Test scroll action
 	actionScroll := map[string]any{

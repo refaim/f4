@@ -63,7 +63,7 @@ var associationsFilePathFn = defaultAssociationsFilePath
 func AssociationsFilePath() string { return associationsFilePathFn() }
 
 func defaultAssociationsFilePath() string {
-	configDir, _ := os.UserConfigDir()
+	configDir, _ := userConfigDir()
 	return filepath.Join(configDir, "f4", "settings", "associations.ini")
 }
 

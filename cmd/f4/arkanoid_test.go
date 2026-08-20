@@ -2,7 +2,6 @@ package main
 
 import (
 	"math/rand"
-	"runtime"
 	"testing"
 	"time"
 
@@ -127,11 +126,9 @@ func TestArkanoid_AutoplayAI(t *testing.T) {
 func TestArkanoid_HighScores(t *testing.T) {
 	// Подменяем путь к директории настроек, чтобы не мусорить на диске
 	tmpDir := t.TempDir()
-	if runtime.GOOS == "windows" {
-		t.Setenv("APPDATA", tmpDir)
-	} else {
-		t.Setenv("XDG_CONFIG_HOME", tmpDir)
-	}
+	oldUserConfigDir := userConfigDir
+	userConfigDir = func() (string, error) { return tmpDir, nil }
+	t.Cleanup(func() { userConfigDir = oldUserConfigDir })
 
 	// Сбрасываем рекорды в памяти
 	ArkHighScores = nil

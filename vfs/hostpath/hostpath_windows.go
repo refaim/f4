@@ -10,6 +10,7 @@
 package hostpath
 
 import (
+	"os"
 	stdpath "path"
 	"path/filepath"
 
@@ -77,7 +78,23 @@ func Abs(path string) (string, error) {
 		}
 		return stdpath.Clean("/" + path), nil
 	}
-	return filepath.Abs(path)
+	// filepath.Abs delegates to Win32 GetFullPathNameW, which strips
+	// trailing dots and spaces from every path component -- names that stay
+	// reachable only through the \\?\ forms built downstream. Absolute
+	// paths therefore resolve lexically: Clean keeps a "folder." component
+	// intact. Drive-relative paths ("C:foo") still go through the OS, since
+	// only it knows each drive's current directory.
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path), nil
+	}
+	if len(path) >= 2 && path[1] == ':' {
+		return filepath.Abs(path)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(wd, path), nil
 }
 
 func EvalSymlinks(path string) (string, error) {

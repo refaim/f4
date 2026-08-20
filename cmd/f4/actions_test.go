@@ -2260,6 +2260,16 @@ func TestActionSwitchEditorToViewerAndBack(t *testing.T) {
 	v := vfs.NewOSVFS(tmpDir)
 	pf := NewPanelsFrame()
 	defer pf.Close()
+	// The editor/viewer frames opened below hold the file; close whichever
+	// is on top so Windows can delete it during TempDir cleanup.
+	defer func() {
+		switch top := vtui.FrameManager.GetTopFrame().(type) {
+		case *EditorView:
+			top.Close()
+		case *ViewerView:
+			top.Close()
+		}
+	}()
 	pf.ResizeConsole(80, 25)
 
 	actionOpenEditor(pf, v, filePath)
@@ -2351,6 +2361,16 @@ func TestActionSwitchEditorToViewer_ModifiedFilePrompt(t *testing.T) {
 	v := vfs.NewOSVFS(tmpDir)
 	pf := NewPanelsFrame()
 	defer pf.Close()
+	// The editor/viewer frames opened below hold the file; close whichever
+	// is on top so Windows can delete it during TempDir cleanup.
+	defer func() {
+		switch top := vtui.FrameManager.GetTopFrame().(type) {
+		case *EditorView:
+			top.Close()
+		case *ViewerView:
+			top.Close()
+		}
+	}()
 	pf.ResizeConsole(80, 25)
 
 	actionOpenEditor(pf, v, filePath)
@@ -2436,6 +2456,16 @@ func TestActionSwitchEditorViewer_HeightPreserved(t *testing.T) {
 	v := vfs.NewOSVFS(tmpDir)
 	pf := NewPanelsFrame()
 	defer pf.Close()
+	// The editor/viewer frames opened below hold the file; close whichever
+	// is on top so Windows can delete it during TempDir cleanup.
+	defer func() {
+		switch top := vtui.FrameManager.GetTopFrame().(type) {
+		case *EditorView:
+			top.Close()
+		case *ViewerView:
+			top.Close()
+		}
+	}()
 	pf.ResizeConsole(80, 25)
 
 	actionOpenEditor(pf, v, filePath)

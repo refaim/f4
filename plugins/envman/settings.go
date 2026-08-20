@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -207,8 +208,19 @@ func replaceFileAtomically(path string, data []byte) (returnErr error) {
 		return err
 	}
 	temporary = nil
-	if err := os.Rename(temporaryPath, path); err != nil {
-		return err
+	// Windows can refuse a replacing rename with ERROR_ACCESS_DENIED while
+	// another writer's own rename of the same target is in flight; the
+	// last-writer-wins contract only needs one of the racers to land, so a
+	// briefly retried rename is enough on every platform.
+	var renameErr error
+	for attempt := 0; attempt < 20; attempt++ {
+		if renameErr = os.Rename(temporaryPath, path); renameErr == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if renameErr != nil {
+		return renameErr
 	}
 	temporaryPath = ""
 

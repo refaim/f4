@@ -64,7 +64,7 @@ func (u *userMenuFrame) Show(scr *vtui.ScreenBuf) {
 // between ~/.config/far2l/settings/user_menu.ini and the f4 directory
 // without renaming.
 func MainMenuFilePath() string {
-	configDir, _ := os.UserConfigDir()
+	configDir, _ := userConfigDir()
 	return filepath.Join(configDir, "f4", "settings", "user_menu.ini")
 }
 

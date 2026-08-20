@@ -22,6 +22,12 @@ var (
 	configDirOnce     sync.Once
 )
 
+// userConfigDir is os.UserConfigDir behind a seam. os.UserConfigDir honors
+// XDG_CONFIG_HOME only on Unix, not on darwin, so tests cannot redirect the
+// config dir through the environment there; they override this variable
+// instead of silently reading and polluting the developer's real profile.
+var userConfigDir = os.UserConfigDir
+
 func GetF4ConfigDir() string {
 	configDirOnce.Do(func() {
 		exe, err := osExecutable()
@@ -49,7 +55,7 @@ func GetF4ConfigDir() string {
 			cachedF4ConfigDir = filepath.Join(exeDir, "Profile")
 			_ = os.MkdirAll(cachedF4ConfigDir, 0755)
 		} else {
-			sysDir, _ := os.UserConfigDir()
+			sysDir, _ := userConfigDir()
 			cachedF4ConfigDir = filepath.Join(sysDir, "f4")
 		}
 	})

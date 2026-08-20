@@ -34,13 +34,15 @@ func TestUpdateFailureMessageRepro(t *testing.T) {
 	// On Windows, opening with O_RDWR and not sharing delete/write access usually locks it.
 	// To make this test cross-platform reliable for our purpose (triggering an error in writeFileSafe),
 	// we'll either lock it or make the dir non-writable.
-	var lockHandle *os.File
 	if runtime.GOOS == "windows" {
-		_, err := os.OpenFile(exePath, os.O_RDWR, 0)
+		// os.OpenFile always shares read/write/delete, which does not stop
+		// the updater's rename-aside at all; only a no-sharing CreateFile
+		// actually blocks the install.
+		unlock, err := lockFileExclusively(exePath)
 		if err != nil {
 			t.Fatal("Failed to create a lock on the file:", err)
 		}
-		defer lockHandle.Close()
+		defer unlock()
 	} else {
 		// On Unix, removing write permission from the directory prevents renaming/creating files.
 		// We also make the file itself read-only, because if rename fails, writeFileSafe
@@ -88,7 +90,9 @@ func TestUpdateFailureMessageRepro(t *testing.T) {
 
 	// 7. Wait for the background task to hit the error and show the dialog by pumping TaskChan
 	var capturedError string
-	timeout := time.After(5 * time.Second)
+	// A download, an extract and a failed spawn all happen before the
+	// dialog shows; loaded CI runners need far more headroom than 5s.
+	timeout := time.After(30 * time.Second)
 Loop:
 	for {
 		select {
