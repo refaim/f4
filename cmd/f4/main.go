@@ -280,10 +280,9 @@ func main() {
 				i++
 			}
 		case "--sudo-dispatcher":
-			if flagVal != "" {
-				sudoDispatcher = flagVal
-			} else if i+1 < len(os.Args) {
-				sudoDispatcher = os.Args[i+1]
+			// Handled before regular argument parsing; still consume its
+			// separate value here so it is not interpreted as another flag.
+			if flagVal == "" && i+1 < len(os.Args) {
 				i++
 			}
 		}

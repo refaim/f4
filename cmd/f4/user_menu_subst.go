@@ -113,7 +113,6 @@ func SubstFileName(cmd string, ctx *SubstContext) SubstResult {
 				if ctx.AskUser != nil {
 					answered, accepted := ctx.AskUser(title, init)
 					if !accepted {
-						cancelled = true
 						return SubstResult{Cancelled: true}
 					}
 					value = answered

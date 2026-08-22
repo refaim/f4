@@ -116,7 +116,7 @@ func NewImageView(ctx context.Context, v vfs.VFS, path string) (*ImageView, erro
 	iv.index = -1
 	iv.topBar = NewTopBar(
 		func() string {
-			base := iv.path
+			var base string
 			if v != nil {
 				base = v.Base(iv.path)
 			} else {

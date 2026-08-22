@@ -457,7 +457,7 @@ func (vv *ViewerView) renderText(scr *vtui.ScreenBuf, width, contentHeight int) 
 				continue
 			}
 
-			rw := 1
+			var rw int
 			if r == '\t' {
 				rw = tabSize - (visualWidth % tabSize)
 			} else {
@@ -609,7 +609,7 @@ func (vv *ViewerView) ProcessKey(e *vtinput.InputEvent) bool {
 						lineLen += size
 						break
 					}
-					rw := 1
+					var rw int
 					if r == '\t' {
 						rw = tabSize - (visualWidth % tabSize)
 					} else {
@@ -861,7 +861,7 @@ func (vv *ViewerView) jumpToEnd() {
 						lineLen += size
 						continue
 					}
-					rw := 1
+					var rw int
 					if r == '\t' {
 						rw = tabSize - (visualWidth % tabSize)
 					} else {

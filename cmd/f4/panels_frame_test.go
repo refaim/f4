@@ -297,8 +297,10 @@ func TestPanelsFrame_Layout(t *testing.T) {
 	pf.ResizeConsole(80, 25)
 
 	// After hiding KeyBar, CommandLine should move to the bottom row
-	expectedKeyBarY = 24 // Still the last line, but invisible
 	expectedCmdLineY = 24
+	if pf.keyBar.Y1 != expectedKeyBarY {
+		t.Errorf("KeyBar should remain at %d when hidden, got %d", expectedKeyBarY, pf.keyBar.Y1)
+	}
 	if pf.cmdLine.Y1 != expectedCmdLineY {
 		t.Errorf("CommandLine should be at %d when KeyBar hidden, got %d", expectedCmdLineY, pf.cmdLine.Y1)
 	}

@@ -591,7 +591,7 @@ func awaitRealAnonymousShareState(t *testing.T, parent context.Context, rawURL s
 	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
 	defer cancel()
 	client := newRealAnonymousShareClient(nil)
-	lastClass := "state-mismatch"
+	var lastClass string
 	for {
 		accessible, err := probeRealAnonymousShare(ctx, client, rawURL)
 		if err == nil && accessible == wanted {

@@ -2534,7 +2534,7 @@ func (ev *EditorView) fillCellsWithLinks(target []vtui.CharInfo, data []byte, de
 	}
 
 	for _, cluster := range clusters {
-		w := cluster.width
+		var w int
 		displayText, sanitizedWidth := vtui.SanitizeCluster(cluster.text)
 		if cluster.text == "\t" {
 			w = tabSize - (visualCol % tabSize)

@@ -547,7 +547,7 @@ func semanticViewerLineLen(data []byte, width int, wrap bool) (lineLen int, text
 			lineLen += size
 			continue
 		}
-		rw := 1
+		var rw int
 		if r == '\t' {
 			rw = tabSize - (visualWidth % tabSize)
 		} else {

@@ -57,7 +57,6 @@ func (meter infoUsageMeter) rowsWithWidth(section string, innerW, y, requestedMe
 			labelRoom = 1
 		}
 		labelPad = runewidth.Truncate(" "+meter.Label, labelRoom, "…")
-		labelWidth = runewidth.StringWidth(labelPad)
 	}
 	if meterWidth < 1 {
 		// Degenerate one-cell interiors cannot display a meaningful meter,

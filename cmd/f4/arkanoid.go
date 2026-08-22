@@ -477,8 +477,7 @@ func (af *ArkanoidFrame) Show(scr *vtui.ScreenBuf) {
 	scr.FillRect(x1, y1, x1+width-3, y1+height-3, ' ', cgaBlack)
 
 	// Ракетка (подсвечивается при удачном стринге)
-	paddleAttr := vtui.SetRGBBoth(0, 0xC0C0C0, 0)
-	paddleAttr = cgaCyan
+	paddleAttr := cgaCyan
 	if af.flashTimer > 0 {
 		paddleAttr = cgaWhite // Ракетка "вспыхивает" от гордости за игрока
 	}
@@ -493,10 +492,6 @@ func (af *ArkanoidFrame) Show(scr *vtui.ScreenBuf) {
 	intW := af.X2 - af.X1 - 1
 	//gridStep := 5
 	brickW := 4
-	margin := (intW - 49) / 2
-	if margin < 0 {
-		margin = 0
-	}
 
 	for _, br := range af.bricks {
 		var charToDraw rune
@@ -542,7 +537,7 @@ func (af *ArkanoidFrame) Show(scr *vtui.ScreenBuf) {
 	}
 
 	// Мяч (эволюционирует от Cyan до Yellow)
-	ballAttr := cgaWhite
+	var ballAttr uint64
 	switch {
 	case af.combo > 12:
 		ballAttr = cgaYellow

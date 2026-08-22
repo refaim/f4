@@ -49,7 +49,7 @@ func TestAsyncBuffer_LoadingCycle(t *testing.T) {
 		}
 
 		// Check if data is now available
-		data, err = buf.Read(0, 5)
+		_, err = buf.Read(0, 5)
 		if err == nil {
 			success = true
 			break

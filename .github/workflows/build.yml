@@ -513,6 +513,19 @@ jobs:
         version: v2.13.1
         args: --new-from-rev=origin/main
 
+    # The step above only reports findings on lines a pull request touched, so
+    # everything the linters have to say about existing code stays invisible —
+    # currently around 2450 findings. Rather than leave that permanently
+    # unspoken, each linter graduates here once its backlog is actually zero,
+    # and from then on it is checked across the whole tree and cannot regrow.
+    # Adding a linter to this list means clearing its debt first, in the same
+    # change.
+    - name: Run whole-tree golangci-lint for the linters with no backlog
+      uses: golangci/golangci-lint-action@v9.3.0
+      with:
+        version: v2.13.1
+        args: --config .golangci-strict.yml
+
     # Unlike the linters above this one is not incremental: it reports only
     # vulnerabilities the code actually reaches, so the whole tree is in scope
     # and the finding count stays at zero rather than accumulating a backlog.

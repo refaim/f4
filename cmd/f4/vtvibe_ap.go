@@ -214,7 +214,6 @@ func aiShowPatchResult(pf *PanelsFrame, root string, dry bool, exitCode int, out
 		}
 		if hasReport {
 			attachReportIdx = currIdx
-			currIdx++
 		}
 
 		if code == viewLogIdx {
