@@ -531,7 +531,6 @@ func restoreRealYandexTrash(t *testing.T, ctx context.Context, backend *yandexDi
 }
 
 func realYandexTrashEntries(ctx context.Context, backend *yandexDiskBackend) ([]yandexResource, error) {
-	const pageSize = 1000
 	var result []yandexResource
 	for offset := 0; ; {
 		query := url.Values{

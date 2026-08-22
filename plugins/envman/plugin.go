@@ -327,15 +327,6 @@ func (plugin *Plugin) setLastApplied(snapshot vfs.ProcessEnvironmentSnapshot) {
 	plugin.mu.Unlock()
 }
 
-func (plugin *Plugin) log(format string, arguments ...any) {
-	plugin.mu.Lock()
-	api := plugin.api
-	plugin.mu.Unlock()
-	if api != nil {
-		api.Log(fmt.Sprintf(format, arguments...))
-	}
-}
-
 func snapshotLines(snapshot vfs.ProcessEnvironmentSnapshot) []string {
 	lines := make([]string, 0, len(snapshot.Variables))
 	for _, variable := range snapshot.Variables {

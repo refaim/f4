@@ -157,12 +157,6 @@ func (r *boundedReaderAt) ReadAt(p []byte, off int64) (int, error) {
 	return n, err
 }
 
-func (r *boundedReaderAt) stats() (int64, int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.bytes, r.ops
-}
-
 type probe struct {
 	ctx      context.Context
 	src      Source

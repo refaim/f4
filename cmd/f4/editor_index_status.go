@@ -104,15 +104,6 @@ func (ev *EditorView) setIndexStatus(s IndexStatus) {
 	}
 }
 
-// noteIndexProgress is what the scan reports through: how far it has read and
-// how many lines that came to. It keeps the phase as it is.
-func (ev *EditorView) noteIndexProgress(scanned int64, lines int) {
-	s := ev.indexStatus
-	s.Scanned = scanned
-	s.Lines = lines
-	ev.setIndexStatus(s)
-}
-
 // indexIsComplete reports whether the index describes the whole buffer, which
 // is the question every caller that needs a line number for a far-away offset
 // actually wants answered.

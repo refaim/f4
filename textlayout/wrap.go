@@ -757,11 +757,6 @@ func (we *WrapEngine) LogicalToVisual(byteOffset int) (visualRow, visualCol int)
 	return totalRow, 0
 }
 
-func (we *WrapEngine) logNav(msg string, offset int, row int, col int) {
-	// Only log if specifically requested to avoid flooding
-	// vtui.DebugLog("LAYOUT_NAV: %s Offset:%d -> VRow:%d VCol:%d", msg, offset, row, col)
-}
-
 // VisualToLogical переводит (строка, колонка) на экране в байтовый оффсет документа.
 func (we *WrapEngine) VisualToLogical(visualRow, visualCol int) int {
 	if visualRow < 0 {

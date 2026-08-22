@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -288,10 +287,6 @@ func (s *Session) Turns() []Turn {
 	defer s.mu.Unlock()
 	return append([]Turn(nil), s.turns...)
 }
-
-// fenceRe matches an opening fence with an optional info string. The part
-// after a colon is treated as a file path: ```go:vtvibe/pack.go
-var fenceRe = regexp.MustCompile("(?m)^```([^\n`]*)$")
 
 // saveArtifacts drops every named code block of the answer into out/, so the
 // user copies a finished file back to disk with F5 instead of selecting text.

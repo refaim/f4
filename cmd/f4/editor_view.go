@@ -30,18 +30,6 @@ import (
 )
 import "golang.org/x/arch/x86/x86asm"
 
-type visualCell struct {
-	info       vtui.CharInfo
-	byteOffset int // Offset in bytes from the start of the logical line
-}
-
-type lineFragment struct {
-	cells           []visualCell
-	startOffset     int // Absolute offset of the fragment start
-	startByteInLine int // Byte in the logical line where the fragment starts
-	endByteInLine   int // Byte where the fragment ends
-}
-
 var (
 	LastEditorSearch          string
 	LastEditorReplace         string

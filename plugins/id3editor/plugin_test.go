@@ -6,33 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/unxed/f4/vfs"
 	"github.com/unxed/id3-go"
 	v1 "github.com/unxed/id3-go/v1"
 	"github.com/unxed/vtui"
 )
-
-type mockApp struct {
-	vfs.App
-	activeVFS     vfs.VFS
-	selectedNames []string
-	messages      []string
-}
-
-func (m *mockApp) GetActivePanelVFS() vfs.VFS {
-	return m.activeVFS
-}
-
-func (m *mockApp) GetSelectedNames() []string {
-	return m.selectedNames
-}
-
-func (m *mockApp) Message(title, msg string, buttons []string) int {
-	m.messages = append(m.messages, msg)
-	return 0
-}
-
-func (m *mockApp) RefreshAll() {}
 
 func init() {
 	vtui.AddStrings(map[string]string{

@@ -3,7 +3,6 @@ package archive
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -69,17 +68,6 @@ func (p *ArchivePlugin) Init(api vfs.HostAPI) error {
 	return nil
 }
 
-type ioCtxReader struct {
-	r   io.Reader
-	ctx context.Context
-}
-
-func (cr *ioCtxReader) Read(p []byte) (int, error) {
-	if cr.ctx.Err() != nil {
-		return 0, cr.ctx.Err()
-	}
-	return cr.r.Read(p)
-}
 func actionArchiveCommands(app vfs.App) {
 	app.Menu(" Archive Commands ", []string{"&1. Add to archive", "&2. Extract files"}, func(idx int) {
 		switch idx {

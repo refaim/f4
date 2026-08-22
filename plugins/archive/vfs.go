@@ -31,17 +31,6 @@ var TestSkipDelay time.Duration
 // transition without waiting for the production grace period.
 var archiveVFSIdleTTL = 2 * time.Second
 
-type dummyDirInfo struct {
-	name string
-}
-
-func (d dummyDirInfo) Name() string       { return d.name }
-func (d dummyDirInfo) Size() int64        { return 0 }
-func (d dummyDirInfo) Mode() fs.FileMode  { return fs.ModeDir | 0755 }
-func (d dummyDirInfo) ModTime() time.Time { return time.Now() }
-func (d dummyDirInfo) IsDir() bool        { return true }
-func (d dummyDirInfo) Sys() any           { return nil }
-
 type ctxReader struct {
 	r   vfs.ReadAtCloser
 	ctx context.Context
@@ -59,12 +48,6 @@ type readerAtAdapter struct {
 func (a readerAtAdapter) ReadAt(p []byte, off int64) (int, error) {
 	return a.r.ReadAt(a.ctx, p, off)
 }
-
-type nopWriteCloser struct {
-	io.Writer
-}
-
-func (n *nopWriteCloser) Close() error { return nil }
 
 type ArchiveVFS struct {
 	mu          sync.Mutex

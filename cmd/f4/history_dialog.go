@@ -133,10 +133,6 @@ func (s *historySearch) selectedSecondary() string {
 	return rec.Extra
 }
 
-func (s *historySearch) setSecondary(items []string, visible bool) {
-	s.setSecondaryWidth(items, visible, 24)
-}
-
 func (s *historySearch) setSecondaryWidth(items []string, visible bool, width int) {
 	s.secondary = make([]string, len(s.all))
 	copy(s.secondary, items)

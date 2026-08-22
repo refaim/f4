@@ -2238,21 +2238,6 @@ func (fp *FileSystemPanel) Refresh() {
 	}
 }
 
-func (fp *FileSystemPanel) cursorSizeOnBottomBorder() string {
-	if AppConfig.ShowPanelFileInfo || (fp.viewMode != ViewModeBrief && fp.viewMode != ViewModeMedium) {
-		return ""
-	}
-	idx := fp.GetCursorIndex()
-	if idx < 0 || idx >= len(fp.entries) {
-		return ""
-	}
-	entry := fp.entries[idx]
-	if entry == nil || entry.IsDir || entry.Name == ".." {
-		return ""
-	}
-	return " " + formatIntWithSpaces(entry.Size) + " B "
-}
-
 func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	fp.frame.Show(scr)
 	titleAttr := vtui.Palette[ColPanelTitle]

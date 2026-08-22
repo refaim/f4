@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"path"
 	"strings"
 )
 
@@ -140,13 +139,4 @@ func validUUID(s string) bool {
 		}
 	}
 	return true
-}
-
-func cleanDisplayPath(p string) string {
-	p = strings.ReplaceAll(p, "\\", "/")
-	cleaned := path.Clean("/" + strings.TrimPrefix(p, "/"))
-	if cleaned == "/." {
-		return "/"
-	}
-	return cleaned
 }

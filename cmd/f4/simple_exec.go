@@ -130,19 +130,6 @@ func captureHostConsoleBuffer(w, h int) {
 	captureHostConsoleBufferImpl(w, h)
 }
 
-func restoreHostConsoleBuffer() {
-	restoreHostConsoleBufferImpl()
-}
-
-// restoreHostConsoleBufferIfSize blits the saved console snapshot back only when
-// it still matches the current screen. Restoring a stale, differently sized
-// snapshot leaves fragments of the old panels hanging over the command output.
-func restoreHostConsoleBufferIfSize(w, h int) {
-	if hostConsoleBufferMatches(w, h) {
-		restoreHostConsoleBufferImpl()
-	}
-}
-
 // runSimpleCapturedCommand executes a command via LocalCommandRunner and displays
 // the streaming output in a scrollable f4 window.
 func (pf *PanelsFrame) runSimpleCapturedCommand(dir, command string) {

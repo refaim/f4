@@ -169,13 +169,6 @@ func newFindQueryMatcher(q FindQuery) (*findQueryMatcher, error) {
 	return m, nil
 }
 
-func (m *findQueryMatcher) matches(data []byte) bool {
-	if m == nil {
-		return true
-	}
-	return m.hasMatch(data) != m.query.NotContaining
-}
-
 func (m *findQueryMatcher) hasMatch(data []byte) bool {
 	if m == nil {
 		return false

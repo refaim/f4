@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-func plugRingRowAt(t *testing.T, rows []interface{ GetCellText(int) string }, i int) plugRingRow {
-	t.Helper()
-	row, ok := rows[i].(plugRingRow)
-	if !ok {
-		t.Fatalf("row %d is %T", i, rows[i])
-	}
-	return row
-}
-
 func TestBuildPlugRingRowsGroupsByCategory(t *testing.T) {
 	items := []PlugRingItem{
 		{ID: "zip", Name: "Zip", Category: "archive", Entrypoint: "plugin.lua"},

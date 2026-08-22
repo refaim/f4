@@ -36,9 +36,7 @@ func (m *mockCrashingHighlighter) Name() string                                 
 func (m *mockCrashingHighlighter) Match(filename, content string) bool              { return true }
 func (m *mockCrashingHighlighter) Create(filename, content string) vtui.Highlighter { return m }
 
-type mockStatefulHighlighter struct {
-	statesComputed int
-}
+type mockStatefulHighlighter struct{}
 
 func (m *mockStatefulHighlighter) Highlight(line string, prev any, base uint64) ([]uint64, any) {
 	depth := 0

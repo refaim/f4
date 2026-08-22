@@ -2046,56 +2046,6 @@ func TestRecursiveCopyClosesTheDestinationBeforeSucceeding(t *testing.T) {
 	}
 }
 
-type mockReadAtCloser struct{}
-
-func (m *mockReadAtCloser) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error) {
-	return 0, io.EOF
-}
-func (m *mockReadAtCloser) Read(ctx context.Context, p []byte) (n int, err error) {
-	return 0, io.EOF
-}
-func (m *mockReadAtCloser) Close() error { return nil }
-func (m *mockReadAtCloser) Size() int64  { return 10 }
-
-type mockWriteCloser struct{}
-
-func (m *mockWriteCloser) Write(p []byte) (n int, err error) { return len(p), nil }
-func (m *mockWriteCloser) Close() error                      { return nil }
-
-type mockVFS struct {
-	vfs.VFS
-	onOpen func(ctx context.Context, path string) (vfs.ReadAtCloser, error)
-}
-
-func (m *mockVFS) IsAtRoot() bool            { return true }
-func (m *mockVFS) GetPath() string           { return "/" }
-func (m *mockVFS) IsAbs(path string) bool    { return true }
-func (m *mockVFS) SetPath(path string) error { return nil }
-func (m *mockVFS) Join(elem ...string) string {
-	return strings.Join(elem, "/")
-}
-func (m *mockVFS) Abs(path string) (string, error) { return path, nil }
-func (m *mockVFS) Base(path string) string         { return "file.txt" }
-func (m *mockVFS) Dir(path string) string          { return "/" }
-func (m *mockVFS) Stat(ctx context.Context, path string) (vfs.VFSItem, error) {
-	return vfs.VFSItem{Name: "file.txt", Size: 10, IsDir: false}, nil
-}
-func (m *mockVFS) Open(ctx context.Context, path string) (vfs.ReadAtCloser, error) {
-	if m.onOpen != nil {
-		return m.onOpen(ctx, path)
-	}
-	return &mockReadAtCloser{}, nil
-}
-func (m *mockVFS) Create(ctx context.Context, path string) (io.WriteCloser, error) {
-	return &mockWriteCloser{}, nil
-}
-func (m *mockVFS) Remove(ctx context.Context, path string) error { return nil }
-func (m *mockVFS) GetCapabilities() vfs.VFSCapabilities {
-	return vfs.VFSCapabilities{HasRandomAccess: true}
-}
-func (m *mockVFS) Close() error   { return nil }
-func (m *mockVFS) Clone() vfs.VFS { return m }
-
 type mockReporter struct {
 	lastAction     string
 	lastFilename   string

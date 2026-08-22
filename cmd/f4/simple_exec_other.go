@@ -9,6 +9,3 @@ func modMsvcrtProcImpl() interface {
 }
 
 func captureHostConsoleBufferImpl(w, h int) {}
-func restoreHostConsoleBufferImpl()         {}
-
-func hostConsoleBufferMatches(w, h int) bool { return false }

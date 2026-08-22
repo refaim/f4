@@ -295,8 +295,6 @@ func (tv *TerminalView) rowHasText(y int) bool {
 	}
 	return false
 }
-func (tv *TerminalView) flushLogUnsafe() {}
-
 func (tv *TerminalView) pushRowToGridHistory(y int) {
 	lineCopy := make([]vtui.CharInfo, len(tv.Lines[y]))
 	copy(lineCopy, tv.Lines[y])

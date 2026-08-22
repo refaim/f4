@@ -269,18 +269,6 @@ func cropPadHighlighted(value string, offset, width int, baseAttr, matchAttr uin
 	return cells
 }
 
-func cropPad(value string, offset, width int) string {
-	runes := []rune(value)
-	if offset > len(runes) {
-		offset = len(runes)
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	value = runewidth.Truncate(string(runes[offset:]), width, "")
-	return value + strings.Repeat(" ", maxInt(0, width-runewidth.StringWidth(value)))
-}
-
 func (p *previewList) ProcessKey(e *vtinput.InputEvent) bool {
 	if !e.KeyDown || len(p.rows) == 0 {
 		return false
