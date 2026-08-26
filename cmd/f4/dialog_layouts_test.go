@@ -383,3 +383,5 @@ func dialogLayoutActionNeedsFreshRig(name string) bool {
 		return false
 	}
 }
+
+// Probe comment: tests-only change to exercise the build gate.
