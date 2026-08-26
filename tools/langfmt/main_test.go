@@ -1,3 +1,4 @@
+// CI selective-testing leaf probe; delete me.
 package main
 
 import (
