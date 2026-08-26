@@ -710,6 +710,14 @@ jobs:
         go-version: '1.26.6'
         cache-dependency-path: go.sum
 
+    - name: Restore Go build cache (quality)
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/go-build
+        key: quality-go-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          quality-go-
+
     - name: Compute affected packages
       id: affected
       uses: ./.github/actions/affected-packages
