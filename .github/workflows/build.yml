@@ -6,6 +6,14 @@ on:
     tags: [ "v*.*.*" ]
   pull_request:
     branches: [ "main" ]
+    # Docs-only pull requests skip CI entirely: nothing below compiles,
+    # packages or tests Markdown. A PR touching both code and docs still
+    # runs -- the filter only skips when EVERY changed file matches.
+    # Deliberately not on the push trigger: it also carries release tags,
+    # where a path filter could silently skip a release.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
     inputs:
       shuffle:
