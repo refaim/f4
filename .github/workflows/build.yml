@@ -691,8 +691,8 @@ jobs:
         GOOS="${TARGET%/*}" GOARCH="${TARGET#*/}" go vet "${flags[@]}" ./...
 
   # Quality and Lint used to be one job; its steps ran back to back and their
-  # sum (~2:40) sat right on the critical path of a PR run. Two runners cost
-  # nothing here, so vet-and-scanners and the linters run side by side.
+  # sum (~2:40) sat right on the critical path of a PR run. Separate runners
+  # cost nothing here, so vet-and-scanners and the lint shards run side by side.
   quality:
     name: Quality
     runs-on: ubuntu-latest
@@ -731,8 +731,11 @@ jobs:
       run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
   lint:
-    name: Lint
+    name: Lint (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: { shard: ['cmd/f4', rest] }
     env:
       CGO_ENABLED: 0
     steps:
@@ -749,11 +752,72 @@ jobs:
         go-version: '1.26.6'
         cache-dependency-path: go.sum
 
+    - name: Compute affected packages
+      id: affected
+      uses: ./.github/actions/affected-packages
+
+    - name: Select incremental lint packages
+      id: lint-packages
+      shell: bash
+      env:
+        AFFECTED: ${{ steps.affected.outputs.packages }}
+        SHARD: ${{ matrix.shard }}
+      run: |
+        set -euo pipefail
+
+        module=$(go list -m)
+        if [ "$AFFECTED" = "all" ]; then
+          packages=$(go list ./...)
+        elif [ -z "$AFFECTED" ]; then
+          packages=""
+        else
+          packages=$(tr ' ' '\n' <<<"$AFFECTED")
+        fi
+
+        cmd_affected=no
+        rest_args=""
+        while IFS= read -r package; do
+          [ -n "$package" ] || continue
+          case "$package" in
+            "$module/cmd/f4"|"$module/cmd/f4"/*)
+              cmd_affected=yes
+              continue ;;
+            "$module")
+              relative=./ ;;
+            "$module"/*)
+              relative="./${package#"$module"/}" ;;
+            *)
+              echo "::error::affected package is outside $module: $package"
+              exit 1 ;;
+          esac
+          rest_args="${rest_args:+$rest_args }$relative"
+        done <<<"$packages"
+
+        if [ "$SHARD" = "cmd/f4" ]; then
+          if [ "$cmd_affected" != "yes" ]; then
+            echo "cmd/f4 is not affected by this diff; skipping incremental lint."
+            echo "run=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "args=./cmd/f4/..." >> "$GITHUB_OUTPUT"
+          echo "run=yes" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [ -z "$rest_args" ]; then
+          echo "No affected packages outside cmd/f4; skipping incremental lint."
+          echo "run=no" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "args=$rest_args" >> "$GITHUB_OUTPUT"
+        echo "run=yes" >> "$GITHUB_OUTPUT"
+
     - name: Run incremental golangci-lint
+      if: steps.lint-packages.outputs.run == 'yes'
       uses: golangci/golangci-lint-action@v9.3.0
       with:
         version: v2.13.1
-        args: --new-from-rev=origin/main
+        args: --new-from-rev=origin/main ${{ steps.lint-packages.outputs.args }}
 
     # The step above only reports findings on lines a pull request touched, so
     # everything the linters have to say about existing code stays invisible —
@@ -763,6 +827,7 @@ jobs:
     # Adding a linter to this list means clearing its debt first, in the same
     # change.
     - name: Run whole-tree golangci-lint for the linters with no backlog
+      if: matrix.shard == 'rest'
       uses: golangci/golangci-lint-action@v9.3.0
       with:
         version: v2.13.1
@@ -770,13 +835,14 @@ jobs:
 
   # Эта джоба создает постоянные релизы при пуше тэгов v*.*.*
   test:
-    name: Test (${{ matrix.target }})
+    name: Test (${{ matrix.target }}${{ matrix.shard && format(' {0}', matrix.shard) || '' }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      # One hosted runner per native os/arch cell, labeled to match the
-      # build matrix. Pull requests skip the second-arch twin of the two
+      # One hosted runner per native os/arch cell, except that the slow
+      # darwin/arm64 and windows/amd64 cells split their tests by name.
+      # Pull requests skip the second-arch twin of the two
       # desktop OSes: darwin/amd64 and windows/arm64 run on the slowest
       # runners of the whole matrix (4-5 minutes against the ~2:40 the
       # rest of a PR run takes) and only catch arch-specific breakage --
@@ -785,7 +851,10 @@ jobs:
       # everywhere: its runner is fast. Inline conditional rather than a
       # plan-job output because these jobs are the critical path, and a
       # needs: edge would bill its scheduling latency to every cell.
-      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64"},{"os":"windows-latest","target":"windows/amd64"}]}') || fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64"},{"os":"macos-15-intel","target":"darwin/amd64"},{"os":"windows-latest","target":"windows/amd64"},{"os":"windows-11-arm","target":"windows/arm64"}]}') }}
+      # A-H is the closest split in cmd/f4's current test list (1126/1070).
+      # The first regex also covers an exact "Test" name; the negated class
+      # puts every other non-standard Test* suffix in the second shard.
+      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64","shard":"A-H","run":"^Test([A-H]|$)"},{"os":"macos-latest","target":"darwin/arm64","shard":"rest","run":"^Test[^A-H]"},{"os":"windows-latest","target":"windows/amd64","shard":"A-H","run":"^Test([A-H]|$)"},{"os":"windows-latest","target":"windows/amd64","shard":"rest","run":"^Test[^A-H]"}]}') || fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64","shard":"A-H","run":"^Test([A-H]|$)"},{"os":"macos-latest","target":"darwin/arm64","shard":"rest","run":"^Test[^A-H]"},{"os":"macos-15-intel","target":"darwin/amd64"},{"os":"windows-latest","target":"windows/amd64","shard":"A-H","run":"^Test([A-H]|$)"},{"os":"windows-latest","target":"windows/amd64","shard":"rest","run":"^Test[^A-H]"},{"os":"windows-11-arm","target":"windows/arm64"}]}') }}
     env:
       CGO_ENABLED: 0
       TEST_SHUFFLE: ${{ inputs.shuffle || 'on' }}
@@ -830,6 +899,7 @@ jobs:
       shell: bash
       env:
         AFFECTED: ${{ steps.affected.outputs.packages }}
+        RUN_FILTER: ${{ matrix.run || '' }}
       run: |
         # Pull requests test only the packages their diff reaches through
         # the import graph (see the affected-packages action); pushes, tags
@@ -849,14 +919,20 @@ jobs:
         # caching off, deliberately: a rolling-cache experiment showed this
         # suite is uncacheable anyway -- the tests read per-run environment
         # (temp dirs), so even an unchanged tree scored zero cache hits.
-        go test -shuffle="$TEST_SHUFFLE" -timeout 15m -skip '^TestAllDialogs_LayoutValidation$' "${targets[@]}"
+        run_args=()
+        if [ -n "$RUN_FILTER" ]; then
+          run_args=(-run "$RUN_FILTER")
+        fi
+        go test -shuffle="$TEST_SHUFFLE" -timeout 15m -skip '^TestAllDialogs_LayoutValidation$' "${run_args[@]}" "${targets[@]}"
         # Layout validation mutates shared UI registries from parallel
         # subtests. Go 1.26 schedules them aggressively enough to expose the
         # upstream race, so isolate that test in a single-threaded process.
-        case " ${targets[*]} " in
-          *" ./... "*|*" github.com/unxed/f4/cmd/f4 "*)
-            GOMAXPROCS=1 go test -timeout 15m -run '^TestAllDialogs_LayoutValidation$' ./cmd/f4 ;;
-        esac
+        if [ -z "$RUN_FILTER" ] || [[ "TestAllDialogs_LayoutValidation" =~ $RUN_FILTER ]]; then
+          case " ${targets[*]} " in
+            *" ./... "*|*" github.com/unxed/f4/cmd/f4 "*)
+              GOMAXPROCS=1 go test -timeout 15m -run '^TestAllDialogs_LayoutValidation$' ./cmd/f4 ;;
+          esac
+        fi
 
     - name: Dump crash reports on failure
       if: failure()
