@@ -835,8 +835,11 @@ jobs:
         # cmd/f4's suite alone takes as long under the detector as every
         # other package combined, and the two halves used to run back to
         # back in one job -- which made it the longest job of the whole
-        # run. A runner each halves the wall time.
-        scope: [cmd/f4, packages]
+        # run. A runner each halves the wall time. cache-key is the scope
+        # with the slash dropped, for the cache path below.
+        include:
+          - { scope: cmd/f4, cache-key: app }
+          - { scope: packages, cache-key: packages }
     env:
       # The race detector requires cgo and the Ubuntu runner provides the
       # native compiler needed by the instrumented test binary.
@@ -847,11 +850,26 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Restore Go caches (race-instrumented)
+      # The shared setup-go cache key is claimed by whichever ubuntu job
+      # saves first -- always one without -race -- so these jobs recompiled
+      # the whole tree under the detector on every run, ~2 minutes each.
+      # Race-instrumented objects get a key of their own; the two scopes
+      # compile different package sets, so the key includes the scope.
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: race-${{ matrix.cache-key }}-go-${{ hashFiles('go.sum', '.github/workflows/build.yml') }}
+        restore-keys: |
+          race-${{ matrix.cache-key }}-go-
+
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
         go-version: '1.26.6'
-        cache-dependency-path: go.sum
+        cache: false
 
     - name: Run race detector
       shell: bash
