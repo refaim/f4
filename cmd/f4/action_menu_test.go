@@ -204,14 +204,7 @@ func TestBuildMenuBarItems_OnClickRunsAction(t *testing.T) {
 }
 
 func TestBuildMenuBarItems_IncludesPluginPanelCommandsInDeclaredMenu(t *testing.T) {
-	oldScreens := vtui.FrameManager.Screens
-	oldActive := vtui.FrameManager.ActiveIdx
-	t.Cleanup(func() {
-		vtui.FrameManager.Screens = oldScreens
-		vtui.FrameManager.ActiveIdx = oldActive
-	})
-	vtui.FrameManager.Screens = []*vtui.AppScreen{{Frames: []vtui.Frame{&PanelsFrame{}}}}
-	vtui.FrameManager.ActiveIdx = 0
+	t.Cleanup(setFrameManagerScreensForTest(t, []*vtui.AppScreen{{Frames: []vtui.Frame{&PanelsFrame{}}}}, 0))
 
 	api := &coreAPI{}
 	run := 0
@@ -259,14 +252,7 @@ func TestBuildMenuBarItems_IncludesPluginPanelCommandsInDeclaredMenu(t *testing.
 }
 
 func TestBuildMenuBarItemsSkipsPluginVisibilityBeforePanelsFrameRegistration(t *testing.T) {
-	oldScreens := vtui.FrameManager.Screens
-	oldActive := vtui.FrameManager.ActiveIdx
-	t.Cleanup(func() {
-		vtui.FrameManager.Screens = oldScreens
-		vtui.FrameManager.ActiveIdx = oldActive
-	})
-	vtui.FrameManager.Screens = nil
-	vtui.FrameManager.ActiveIdx = 0
+	t.Cleanup(setFrameManagerScreensForTest(t, nil, 0))
 
 	api := &coreAPI{}
 	registration, err := api.RegisterPluginCommand(vfs.PluginCommand{

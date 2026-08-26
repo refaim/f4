@@ -907,6 +907,11 @@ func TestQueueCancelFinalizesOnTheFrameManagerItStartedWith(t *testing.T) {
 	// What the next test does while the finalizer is still in flight.
 	replacement := vtui.NewFrameManager()
 	vtui.FrameManager = replacement
+	t.Cleanup(func() {
+		closeFrameManagerFrames(replacement)
+		replacement.Shutdown()
+		vtui.FrameManager = starting
+	})
 
 	deadline := time.NewTimer(5 * time.Second)
 	defer deadline.Stop()

@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/unxed/f4/vfs"
-	"github.com/unxed/vtinput"
-	"github.com/unxed/vtui"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/unxed/f4/fusefs"
+	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
 )
 
 // pressKey dispatches a key through the production input path: the
@@ -60,7 +62,8 @@ func preserveActionRegistry(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	baseFrameManager := vtui.FrameManager
+	baseFrameManager.Init(vtui.NewSilentScreenBuf())
 	vfs.InitSudoClient("/usr/bin/f4", "")
 
 	// Unit tests must never hand control to the user's desktop. Individual
@@ -102,6 +105,34 @@ func TestMain(m *testing.M) {
 	}
 
 	result := m.Run()
+
+	for _, unmountErr := range fusefs.UnmountAll() {
+		_, _ = fmt.Fprintf(os.Stderr, "unmount test FUSE filesystem: %v\n", unmountErr)
+		result = 1
+	}
+
+	globalFrameManager := vtui.FrameManager
+	if globalFrameManager != nil {
+		closeFrameManagerFrames(globalFrameManager)
+		globalFrameManager.Shutdown()
+	}
+	if baseFrameManager != globalFrameManager {
+		_, _ = fmt.Fprintln(os.Stderr, "vtui.FrameManager was not restored to the TestMain manager")
+		closeFrameManagerFrames(baseFrameManager)
+		baseFrameManager.Shutdown()
+		result = 1
+	}
+
+	taskPumps, goroutineProfile, profileErr := taskPumpGoroutineProfile()
+	if profileErr != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "capture goroutine profile after vtui shutdown: %v\n", profileErr)
+		result = 1
+	} else if taskPumps > 0 {
+		_, _ = fmt.Fprintf(os.Stderr,
+			"vtui task-pump goroutine leak: %d startTaskPump goroutine(s) remain after test teardown; want 0\n%s",
+			taskPumps, goroutineProfile)
+		result = 1
+	}
 
 	if err == nil {
 		if removeErr := os.RemoveAll(tmpDir); removeErr != nil {

@@ -142,11 +142,10 @@ func TestActionPanelToggleTargetsActiveWorkspace(t *testing.T) {
 
 	first := &PanelsFrame{showPanels: true, showLeftPanel: true, showRightPanel: true}
 	active := &PanelsFrame{showPanels: true, showLeftPanel: true, showRightPanel: true}
-	vtui.FrameManager.Screens = []*vtui.AppScreen{
+	t.Cleanup(setFrameManagerScreensForTest(t, []*vtui.AppScreen{
 		{Number: 1, Frames: []vtui.Frame{first}},
 		{Number: 2, Frames: []vtui.Frame{active}},
-	}
-	vtui.FrameManager.ActiveIdx = 1
+	}, 1))
 
 	if !RunAction("Panel.Toggle") {
 		t.Fatal("Panel.Toggle did not run")

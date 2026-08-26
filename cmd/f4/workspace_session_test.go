@@ -51,11 +51,10 @@ func TestCaptureWorkspaceSessionsUsesTabOrderAndActiveIndex(t *testing.T) {
 	}
 	first := newPanels(t.TempDir(), t.TempDir())
 	second := newPanels(t.TempDir(), t.TempDir())
-	vtui.FrameManager.Screens = []*vtui.AppScreen{
+	t.Cleanup(setFrameManagerScreensForTest(t, []*vtui.AppScreen{
 		{Number: 8, Frames: []vtui.Frame{first}},
 		{Number: 3, Frames: []vtui.Frame{second}},
-	}
-	vtui.FrameManager.ActiveIdx = 1
+	}, 1))
 
 	states, active := captureWorkspaceSessions()
 	if active != 1 {
@@ -152,11 +151,11 @@ func TestWorkspaceSessionsForRestore(t *testing.T) {
 func TestRenumberWorkspaceScreensFollowsCurrentOrder(t *testing.T) {
 	t.Cleanup(swapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-	vtui.FrameManager.Screens = []*vtui.AppScreen{
+	t.Cleanup(setFrameManagerScreensForTest(t, []*vtui.AppScreen{
 		{Number: 7},
 		{Number: 2},
 		{Number: 11},
-	}
+	}, 0))
 
 	renumberWorkspaceScreens()
 

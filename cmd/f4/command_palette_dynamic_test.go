@@ -20,8 +20,7 @@ func setCommandPaletteActivePanelsForTest(t *testing.T, pf *PanelsFrame) {
 	screen := vtui.NewSilentScreenBuf()
 	screen.AllocBuf(100, 30)
 	vtui.FrameManager.Init(screen)
-	vtui.FrameManager.Screens = []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}
-	vtui.FrameManager.ActiveIdx = 0
+	t.Cleanup(setFrameManagerScreensForTest(t, []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}, 0))
 }
 
 func TestCommandPaletteIncludesRecordedAndLuaMacros(t *testing.T) {
@@ -193,8 +192,7 @@ func TestCommandPalettePrefixAndDriveRejectPreviousWorkspace(t *testing.T) {
 	}
 
 	current := &PanelsFrame{cmdLine: NewCommandLine(""), panels: [2]Panel{&FileSystemPanel{}, &FileSystemPanel{}}}
-	vtui.FrameManager.Screens = append(vtui.FrameManager.Screens, &vtui.AppScreen{Number: 2, Frames: []vtui.Frame{current}})
-	vtui.FrameManager.ActiveIdx = 1
+	t.Cleanup(appendFrameManagerScreenForTest(t, &vtui.AppScreen{Number: 2, Frames: []vtui.Frame{current}}, 1))
 	if executeCommandPaletteEntry(prefixEntry) || pf.cmdLine.Edit.GetText() != "" {
 		t.Fatal("stale prefix entry mutated the previous workspace")
 	}

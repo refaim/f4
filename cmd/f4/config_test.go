@@ -164,19 +164,17 @@ func TestSaveSettingsGroupsKeepUnselectedValues(t *testing.T) {
 	oldUserPath := getUserConfigIniPath
 	oldConfigPaths := getConfigIniPaths
 	oldSessionPath := getSessionIniPath
-	oldFrameManager := vtui.FrameManager
+	t.Cleanup(swapFrameManager(t))
 	defer func() {
 		AppConfig = oldConfig
 		getUserConfigIniPath = oldUserPath
 		getConfigIniPaths = oldConfigPaths
 		getSessionIniPath = oldSessionPath
-		vtui.FrameManager = oldFrameManager
 	}()
 
 	getUserConfigIniPath = func() string { return settingsPath }
 	getConfigIniPaths = func() []string { return []string{settingsPath} }
 	getSessionIniPath = func() string { return sessionPath }
-	vtui.FrameManager = vtui.NewFrameManager()
 
 	AppConfig.ColorStyle = "Persisted"
 	AppConfig.GuiCols = 80
@@ -913,6 +911,11 @@ func TestRequestSaveConfigPostsToTheFrameManagerItWasArmedWith(t *testing.T) {
 	// What the next test does while the timer is still counting down.
 	replacement := vtui.NewFrameManager()
 	vtui.FrameManager = replacement
+	t.Cleanup(func() {
+		closeFrameManagerFrames(replacement)
+		replacement.Shutdown()
+		vtui.FrameManager = arming
+	})
 
 	deadline := time.NewTimer(5 * time.Second)
 	defer deadline.Stop()

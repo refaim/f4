@@ -9,6 +9,34 @@ import (
 	"github.com/unxed/vtui"
 )
 
+type panelMountTaskRunner func(
+	pf *PanelsFrame,
+	label string,
+	readOnly bool,
+	run func(context.Context) (*fusefs.Mount, error),
+)
+
+var runPanelMountTask panelMountTaskRunner
+
+func runPanelMountProgressTask(
+	pf *PanelsFrame,
+	label string,
+	readOnly bool,
+	run func(context.Context) (*fusefs.Mount, error),
+) {
+	var mount *fusefs.Mount
+	pf.RunProgressTask(" Mount ", "Mounting "+label+"...", false,
+		func(ctx context.Context, _ func(msg string, percent int)) error {
+			mounted, err := run(ctx)
+			if err != nil {
+				return err
+			}
+			mount = mounted
+			return nil
+		},
+		func(err error) { reportMount(pf, label, mount, err, readOnly) })
+}
+
 // The panel-side entry point for FUSE mounts (FUSE.md, iteration 2).
 //
 // This is the first, deliberately small step of that iteration: one command
@@ -87,18 +115,13 @@ func mountActivePanel(pf *PanelsFrame, readOnly bool) {
 	// extracted before it can be listed, a remote host may have to answer.
 	// Only the plan above touches the panel's own VFS, and it runs here on
 	// the UI thread; everything the task does afterwards belongs to the
-	// mount alone.
-	var m *fusefs.Mount
-	pf.RunProgressTask(" Mount ", "Mounting "+label+"...", false,
-		func(ctx context.Context, _ func(msg string, percent int)) error {
-			mounted, err := run(ctx)
-			if err != nil {
-				return err
-			}
-			m = mounted
-			return nil
-		},
-		func(err error) { reportMount(pf, label, m, err, readOnly) })
+	// mount alone. Tests can replace the runner while retaining the same
+	// action planning and result-dialog path without mounting through FUSE.
+	runner := runPanelMountTask
+	if runner == nil {
+		runner = runPanelMountProgressTask
+	}
+	runner(pf, label, readOnly, run)
 }
 
 // mountPlan decides what the active panel would have mounted, and returns a

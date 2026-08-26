@@ -121,20 +121,12 @@ func TestArkanoidActionKeepsPhysicalShortcutFrameworkOwned(t *testing.T) {
 }
 
 func TestFixedSideActionsUseTheAddressedPanelState(t *testing.T) {
-	oldScreens := vtui.FrameManager.Screens
-	oldActive := vtui.FrameManager.ActiveIdx
-	defer func() {
-		vtui.FrameManager.Screens = oldScreens
-		vtui.FrameManager.ActiveIdx = oldActive
-	}()
-
 	left := &FileSystemPanel{viewMode: ViewModeBrief, sortMode: SortTime}
 	right := &FileSystemPanel{
 		vfs: &staticDirectActionsAITestVFS{VFS: vfs.NewNullVFS(0)},
 	}
 	pf := &PanelsFrame{panels: [2]Panel{left, right}}
-	vtui.FrameManager.Screens = []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}
-	vtui.FrameManager.ActiveIdx = 0
+	t.Cleanup(setFrameManagerScreensForTest(t, []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}, 0))
 
 	leftBrief, _ := GetAction("Panel.Left.ViewBrief")
 	leftWide, _ := GetAction("Panel.Left.ViewWide")
@@ -231,19 +223,14 @@ func TestFixedSideMenuKeepsActivePanelShortcutHints(t *testing.T) {
 }
 
 func TestFixedSidePaletteEntriesUseLocalizedSideCategories(t *testing.T) {
-	oldScreens := vtui.FrameManager.Screens
-	oldActive := vtui.FrameManager.ActiveIdx
 	oldHotkeys := GlobalHotkeysMgr
 	defer func() {
-		vtui.FrameManager.Screens = oldScreens
-		vtui.FrameManager.ActiveIdx = oldActive
 		GlobalHotkeysMgr = oldHotkeys
 	}()
 	GlobalHotkeysMgr = NewHotkeyManager("")
 
 	pf := &PanelsFrame{cmdLine: NewCommandLine(""), panels: [2]Panel{&FileSystemPanel{}, &FileSystemPanel{}}}
-	vtui.FrameManager.Screens = []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}
-	vtui.FrameManager.ActiveIdx = 0
+	t.Cleanup(setFrameManagerScreensForTest(t, []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}, 0))
 
 	want := map[string]string{
 		"Panel.Left.ViewBrief":   plainLabel(Msg("Menu.Left")),

@@ -163,12 +163,9 @@ func TestCommandPaletteIncludesBothPluginLocationsAndReResolves(t *testing.T) {
 		// Install the deliberately minimal PanelsFrame in an isolated manager so
 		// workspace validation stays meaningful without borrowing another test's
 		// active screen.
-		oldFrameManager := vtui.FrameManager
-		manager := vtui.NewFrameManager()
-		manager.Screens = []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}
-		manager.ActiveIdx = 0
-		vtui.FrameManager = manager
-		defer func() { vtui.FrameManager = oldFrameManager }()
+		restoreFrameManager := swapFrameManager(t)
+		defer restoreFrameManager()
+		defer setFrameManagerScreensForTest(t, []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}, 0)()
 
 		if !executeCommandPaletteEntry(panel) || runs != 1 {
 			t.Fatalf("live plugin command ran %d times", runs)

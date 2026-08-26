@@ -474,12 +474,10 @@ func TestProcessEnvironmentBroadcastReachesEveryLocalWorkspace(t *testing.T) {
 	secondPTY := &processEnvironmentPTY{}
 	first := &PanelsFrame{pty: firstPTY, termView: NewTerminalView(80, 24)}
 	second := &PanelsFrame{pty: secondPTY, termView: NewTerminalView(80, 24)}
-	defer first.closeProcessEnvironmentShell()
-	defer second.closeProcessEnvironmentShell()
-	vtui.FrameManager.Screens = []*vtui.AppScreen{
+	t.Cleanup(setFrameManagerScreensForTest(t, []*vtui.AppScreen{
 		{Number: 1, Frames: []vtui.Frame{first}},
 		{Number: 2, Frames: []vtui.Frame{second}},
-	}
+	}, 0))
 
 	broadcastProcessEnvironmentGenerations([]processEnvironmentGeneration{{
 		generation: 12,

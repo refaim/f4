@@ -78,9 +78,8 @@ func TestFilterGuiFontDisplayChoicesMatchesSubstring(t *testing.T) {
 }
 
 func TestConfigureGuiFontComboFiltersWhileKeepingManualInput(t *testing.T) {
-	previousFrameManager := vtui.FrameManager
+	t.Cleanup(swapFrameManager(t))
 	vtui.FrameManager = nil
-	t.Cleanup(func() { vtui.FrameManager = previousFrameManager })
 
 	choices := []string{"JetBrainsMono-Regular", "NotoSansCJK", "Liberation Mono"}
 	combo := vtui.NewComboBox(0, 0, 30, choices)
