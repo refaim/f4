@@ -927,7 +927,11 @@ jobs:
         RUN_FILTER: ${{ matrix.run || '' }}
       run: |
         if [ -n "$RUN_FILTER" ]; then
-          go test -race -shuffle=on -timeout 15m -run "$RUN_FILTER" ./cmd/f4
+          # 5m, not 15m: a warm half runs in about a minute, and the known
+          # cmd/f4 hang (leaked FrameManager task pumps; TestMain stuck in a
+          # chan receive) otherwise burns the full timeout before the job
+          # can go red and be retried.
+          go test -race -shuffle=on -timeout 5m -run "$RUN_FILTER" ./cmd/f4
           exit 0
         fi
         # The FFI dependencies now keep Go-owned pointers typed and isolate
