@@ -1,0 +1,87 @@
+name: Affected packages
+description: >-
+  Compute which Go packages a pull request actually touches, directly or
+  through the import graph, so test jobs can skip the rest. Resolves to
+  "all" outside pull requests and whenever the diff contains anything that
+  cannot be safely attributed to a package (go.mod, the workflow itself,
+  submodule bumps, unknown files) -- guessing wrong here would silently
+  skip real tests, so every doubt falls back to the full run.
+inputs:
+  base-sha:
+    description: Base commit of the pull request (github.event.pull_request.base.sha)
+    required: true
+outputs:
+  packages:
+    description: Space-separated import paths to test, or the literal "all"
+    value: ${{ steps.calc.outputs.packages }}
+runs:
+  using: composite
+  steps:
+    - id: calc
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+      run: |
+        set -euo pipefail
+
+        all() { echo "packages=all" >> "$GITHUB_OUTPUT"; echo "affected: all ($1)"; exit 0; }
+
+        if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+          all "not a pull request"
+        fi
+
+        # The PR checkout is the shallow merge commit; its first parent is
+        # the base branch head, so a two-dot diff against the fetched base
+        # is exactly what the PR changes.
+        git fetch --quiet --depth=1 origin "$BASE_SHA" || all "base fetch failed"
+        mapfile -t files < <(git diff --name-only "$BASE_SHA" HEAD)
+        [ ${#files[@]} -gt 0 ] || all "empty diff"
+
+        dirs=()
+        for f in "${files[@]}"; do
+          case "$f" in
+            go.mod|go.sum|vtui|vtinput|.github/*|.golangci*)
+              all "$f changes what every package sees" ;;
+            cmd/f4/*)
+              # Language files, help pages, icons and testdata are read by
+              # cmd/f4's tests at run time; attribute the whole subtree to
+              # the package rather than reasoning per file type.
+              dirs+=("cmd/f4") ;;
+            */testdata/*)
+              dirs+=("${f%%/testdata/*}") ;;
+            *.go)
+              dirs+=("$(dirname "$f")") ;;
+            *)
+              all "cannot attribute $f to a package" ;;
+          esac
+        done
+
+        changed=$(printf './%s\n' "${dirs[@]}" | sort -u | xargs go list 2>/dev/null) \
+          || all "changed path is not a package"
+
+        # Two passes over one package listing. Deps is already transitive,
+        # so pass one finds every package whose import graph reaches a
+        # changed one. Test imports are direct-only, so pass two widens the
+        # result to packages whose _test.go files import anything from pass
+        # one -- that covers a test-only dependency changing underneath.
+        affected=$(go list -f '{{.ImportPath}}|{{join .Deps " "}}|{{join .TestImports " "}} {{join .XTestImports " "}}' ./... \
+          | awk -F'|' -v changed="$(tr '\n' ' ' <<<"$changed")" '
+            BEGIN { n = split(changed, c, " "); for (i = 1; i <= n; i++) ch[c[i]] = 1 }
+            {
+              pkg[NR] = $1; deps[NR] = $2; timp[NR] = $3
+              hit = ch[$1] ? 1 : 0
+              if (!hit) { m = split($2, d, " "); for (i = 1; i <= m; i++) if (ch[d[i]]) { hit = 1; break } }
+              if (hit) imp[$1] = 1
+            }
+            END {
+              for (r = 1; r <= NR; r++) {
+                ok = imp[pkg[r]]
+                if (!ok) { m = split(timp[r], t, " "); for (i = 1; i <= m; i++) if (imp[t[i]]) { ok = 1; break } }
+                if (ok) print pkg[r]
+              }
+            }')
+
+        [ -n "$affected" ] || { echo "packages=" >> "$GITHUB_OUTPUT"; echo "affected: none"; exit 0; }
+        echo "packages=$(tr '\n' ' ' <<<"$affected" | sed 's/ $//')" >> "$GITHUB_OUTPUT"
+        echo "affected: $(wc -l <<<"$affected" | tr -d ' ') of $(go list ./... | wc -l | tr -d ' ') packages"
+        printf '  %s\n' $affected

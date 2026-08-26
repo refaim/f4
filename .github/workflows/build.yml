@@ -798,9 +798,28 @@ jobs:
           go.sum
           .github/workflows/go-cache-salt
 
+    - name: Compute affected packages
+      id: affected
+      uses: ./.github/actions/affected-packages
+      with:
+        base-sha: ${{ github.event.pull_request.base.sha || github.sha }}
+
     - name: Run Tests
       shell: bash
+      env:
+        AFFECTED: ${{ steps.affected.outputs.packages }}
       run: |
+        # Pull requests test only the packages their diff reaches through
+        # the import graph (see the affected-packages action); pushes, tags
+        # and manual runs always test everything.
+        if [ "$AFFECTED" = "all" ]; then
+          targets=(./...)
+        elif [ -z "$AFFECTED" ]; then
+          echo "No packages affected by this diff; skipping tests."
+          exit 0
+        else
+          read -ra targets <<<"$AFFECTED"
+        fi
         # Shuffle tests and subtests to expose order dependencies. Go prints
         # the seed on every run, so reproduce a failure with -shuffle=<seed>.
         # The seed selects a permutation of the test set, so it only reproduces
@@ -808,11 +827,14 @@ jobs:
         # caching off, deliberately: a rolling-cache experiment showed this
         # suite is uncacheable anyway -- the tests read per-run environment
         # (temp dirs), so even an unchanged tree scored zero cache hits.
-        go test -shuffle="$TEST_SHUFFLE" -timeout 15m -skip '^TestAllDialogs_LayoutValidation$' ./...
+        go test -shuffle="$TEST_SHUFFLE" -timeout 15m -skip '^TestAllDialogs_LayoutValidation$' "${targets[@]}"
         # Layout validation mutates shared UI registries from parallel
         # subtests. Go 1.26 schedules them aggressively enough to expose the
         # upstream race, so isolate that test in a single-threaded process.
-        GOMAXPROCS=1 go test -timeout 15m -run '^TestAllDialogs_LayoutValidation$' ./cmd/f4
+        case " ${targets[*]} " in
+          *" ./... "*|*" github.com/unxed/f4/cmd/f4 "*)
+            GOMAXPROCS=1 go test -timeout 15m -run '^TestAllDialogs_LayoutValidation$' ./cmd/f4 ;;
+        esac
 
     - name: Dump crash reports on failure
       if: failure()
@@ -920,13 +942,24 @@ jobs:
         go-version: '1.26.6'
         cache: false
 
+    - name: Compute affected packages
+      id: affected
+      uses: ./.github/actions/affected-packages
+      with:
+        base-sha: ${{ github.event.pull_request.base.sha || github.sha }}
+
     - name: Run race detector
       shell: bash
       env:
         SCOPE: ${{ matrix.scope }}
         RUN_FILTER: ${{ matrix.run || '' }}
+        AFFECTED: ${{ steps.affected.outputs.packages }}
       run: |
         if [ -n "$RUN_FILTER" ]; then
+          if [ "$AFFECTED" != "all" ] && [[ " $AFFECTED " != *" github.com/unxed/f4/cmd/f4 "* ]]; then
+            echo "cmd/f4 is not affected by this diff; skipping."
+            exit 0
+          fi
           # 5m, not 15m: a warm half runs in about a minute, and the known
           # cmd/f4 hang (leaked FrameManager task pumps; TestMain stuck in a
           # chan receive) otherwise burns the full timeout before the job
@@ -945,6 +978,13 @@ jobs:
         if [ ${#packages[@]} -eq 0 ]; then
           echo "::error::no packages left to run under the race detector"
           exit 1
+        fi
+        if [ "$AFFECTED" != "all" ]; then
+          mapfile -t packages < <(printf '%s\n' "${packages[@]}" | grep -Fx -f <(tr ' ' '\n' <<<"$AFFECTED") || true)
+          if [ ${#packages[@]} -eq 0 ] || [ -z "${packages[0]}" ]; then
+            echo "No affected packages outside cmd/f4; skipping."
+            exit 0
+          fi
         fi
         go test -race -shuffle=on -timeout 15m "${packages[@]}"
 
