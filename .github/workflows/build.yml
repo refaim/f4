@@ -666,6 +666,9 @@ jobs:
         fi
         GOOS="${TARGET%/*}" GOARCH="${TARGET#*/}" go vet "${flags[@]}" ./...
 
+  # Quality and Lint used to be one job; its steps ran back to back and their
+  # sum (~2:40) sat right on the critical path of a PR run. Two runners cost
+  # nothing here, so vet-and-scanners and the linters run side by side.
   quality:
     name: Quality
     runs-on: ubuntu-latest
@@ -675,7 +678,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v7
       with:
-        fetch-depth: 0
         submodules: recursive
 
     - name: Set up Go
@@ -686,6 +688,42 @@ jobs:
 
     - name: Run go vet
       run: go vet ./...
+
+    # govulncheck is not incremental on purpose: it reports only
+    # vulnerabilities the code actually reaches, so the whole tree is in scope
+    # and the finding count stays at zero rather than accumulating a backlog.
+    # The tool version is pinned; the vulnerability database it consults is
+    # fetched at run time, so a newly published advisory turns this red without
+    # any change here — which is the point.
+    # build.yml is approaching 900 lines, most of it shell embedded in run:
+    # blocks that nothing checked. actionlint validates the workflow schema and
+    # every expression, and hands each run: block to shellcheck — which the
+    # ubuntu image already ships, so it needs no setup here. Both classes of
+    # mistake it catches otherwise cost a full CI round trip to discover.
+    - name: Run actionlint
+      run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+    - name: Run govulncheck
+      run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 0
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        # Full history: the incremental lint below diffs against origin/main.
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: go.sum
 
     - name: Run incremental golangci-lint
       uses: golangci/golangci-lint-action@v9.3.0
@@ -705,23 +743,6 @@ jobs:
       with:
         version: v2.13.1
         args: --config .golangci-strict.yml
-
-    # Unlike the linters above this one is not incremental: it reports only
-    # vulnerabilities the code actually reaches, so the whole tree is in scope
-    # and the finding count stays at zero rather than accumulating a backlog.
-    # The tool version is pinned; the vulnerability database it consults is
-    # fetched at run time, so a newly published advisory turns this red without
-    # any change here — which is the point.
-    # build.yml is approaching 800 lines, most of it shell embedded in run:
-    # blocks that nothing checked. actionlint validates the workflow schema and
-    # every expression, and hands each run: block to shellcheck — which the
-    # ubuntu image already ships, so it needs no setup here. Both classes of
-    # mistake it catches otherwise cost a full CI round trip to discover.
-    - name: Run actionlint
-      run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-
-    - name: Run govulncheck
-      run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
   # Эта джоба создает постоянные релизы при пуше тэгов v*.*.*
   test:
@@ -783,7 +804,10 @@ jobs:
         # Shuffle tests and subtests to expose order dependencies. Go prints
         # the seed on every run, so reproduce a failure with -shuffle=<seed>.
         # The seed selects a permutation of the test set, so it only reproduces
-        # while that set remains unchanged.
+        # while that set remains unchanged. Shuffle also pins go's test-result
+        # caching off, deliberately: a rolling-cache experiment showed this
+        # suite is uncacheable anyway -- the tests read per-run environment
+        # (temp dirs), so even an unchanged tree scored zero cache hits.
         go test -shuffle="$TEST_SHUFFLE" -timeout 15m -skip '^TestAllDialogs_LayoutValidation$' ./...
         # Layout validation mutates shared UI registries from parallel
         # subtests. Go 1.26 schedules them aggressively enough to expose the
@@ -855,12 +879,15 @@ jobs:
       fail-fast: false
       matrix:
         # cmd/f4's suite alone takes as long under the detector as every
-        # other package combined, and the two halves used to run back to
-        # back in one job -- which made it the longest job of the whole
-        # run. A runner each halves the wall time. cache-key is the scope
-        # with the slash dropped, for the cache path below.
+        # other package combined, so it gets runners of its own -- split in
+        # two by test-name letter, because even alone it sat on the critical
+        # path. The A-G boundary is hand-picked for rough balance (1062 vs
+        # 1151 tests today); rebalance it if the halves drift apart as tests
+        # are added. The halves share the app cache key on purpose: they
+        # compile identical objects, so whichever saves first serves both.
         include:
-          - { scope: cmd/f4, cache-key: app }
+          - { scope: 'cmd/f4 A-G', cache-key: app, run: '^Test[A-G]' }
+          - { scope: 'cmd/f4 H-Z', cache-key: app, run: '^Test[^A-G]' }
           - { scope: packages, cache-key: packages }
     env:
       # The race detector requires cgo and the Ubuntu runner provides the
@@ -897,9 +924,10 @@ jobs:
       shell: bash
       env:
         SCOPE: ${{ matrix.scope }}
+        RUN_FILTER: ${{ matrix.run || '' }}
       run: |
-        if [ "$SCOPE" = "cmd/f4" ]; then
-          go test -race -shuffle=on -timeout 15m ./cmd/f4
+        if [ -n "$RUN_FILTER" ]; then
+          go test -race -shuffle=on -timeout 15m -run "$RUN_FILTER" ./cmd/f4
           exit 0
         fi
         # The FFI dependencies now keep Go-owned pointers typed and isolate
