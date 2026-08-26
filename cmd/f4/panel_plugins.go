@@ -101,7 +101,7 @@ func openRegisteredPanelProvider(app vfs.App, providerID string) {
 	controller, err := provider.Open(ctx)
 	if err != nil {
 		vtui.DebugLog("PANEL [%s]: open failed: %v", provider.ID, err)
-		vtui.ShowToast(fmt.Sprintf("Panel %s: %v", provider.Title, err), 3e9)
+		showToast(fmt.Sprintf("Panel %s: %v", provider.Title, err), 3e9)
 		return
 	}
 	if controller == nil {

@@ -75,6 +75,11 @@ func TestMain(m *testing.M) {
 	// tests that exercise the PTY path construct one explicitly.
 	spawnLocalShellPTY = false
 
+	// Toast behavior is still exercised through vtui's real asynchronous
+	// setup and expiry paths, but unit tests do not need production-length
+	// display times.
+	toastDurationOverride = func(time.Duration) time.Duration { return time.Millisecond }
+
 	// The machine's clipboard is global, slow to reach (pbcopy/xclip) and
 	// shared with whatever else the CI runner is doing; tests keep clipboard
 	// traffic in vtui's process-local buffer instead, and skip the OSC 52

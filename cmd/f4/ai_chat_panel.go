@@ -176,7 +176,7 @@ func (cp *AIChatPanel) ProcessKey(e *vtinput.InputEvent) bool {
 		for i := len(turns) - 1; i >= 0; i-- {
 			if turns[i].Role != "user" && turns[i].Text != "RCtrl+A to hide" {
 				setClipboardAsync(turns[i].Text)
-				vtui.ShowToast("Copied last response to clipboard", 2*time.Second)
+				showToast("Copied last response to clipboard", 2*time.Second)
 				break
 			}
 		}
@@ -879,7 +879,7 @@ func (cp *AIChatPanel) copyLinkTarget(target string) {
 				vtui.ShowMessage(" Error ", "Copy failed:\n"+err.Error(), []string{"&Ok"})
 			} else {
 				dstFSP.ReadDirectory()
-				vtui.ShowToast("Copied "+fileName+" to "+dstDir, 2*time.Second)
+				showToast("Copied "+fileName+" to "+dstDir, 2*time.Second)
 			}
 		})
 }

@@ -3109,7 +3109,7 @@ func actionSaveSettings(pf *PanelsFrame) {
 	btnSave.OnClick = func() {
 		saveSettingsGroups(chkGeneral.State == 1, chkPanel.State == 1, chkWindow.State == 1)
 		dlg.Close()
-		vtui.ShowToast(Msg("SaveSettings.Done"), 2*time.Second)
+		showToast(Msg("SaveSettings.Done"), 2*time.Second)
 	}
 
 	vtui.FrameManager.PushToFrameScreen(pf, dlg)
@@ -4048,7 +4048,7 @@ func actionImportFar2lHistory(pf *PanelsFrame) {
 				h := extractNames(merged)
 				pf.cmdLine.Edit.History = h
 
-				vtui.ShowToast(fmt.Sprintf("Imported %d new commands from far2l.", len(merged)-len(current)), 3*time.Second)
+				showToast(fmt.Sprintf("Imported %d new commands from far2l.", len(merged)-len(current)), 3*time.Second)
 			})
 		})
 	}

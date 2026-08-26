@@ -1644,7 +1644,7 @@ func (tv *TerminalView) ProcessFar2lInteract(data []byte) {
 		text := stk.PopString()
 		title := stk.PopString()
 		vtui.FrameManager.PostTask(func() {
-			vtui.ShowToast(title+": "+text, 3*time.Second)
+			showToast(title+": "+text, 3*time.Second)
 		})
 	case 'f': // FKey titles
 		for i := 0; i < 12; i++ {

@@ -1162,7 +1162,7 @@ func (pf *PanelsFrame) reportLocalPTYFailure() {
 		return
 	}
 	vtui.FrameManager.PostTask(func() {
-		vtui.ShowToast(Msg("Terminal.PTYAllocFailed"), 5*time.Second)
+		showToast(Msg("Terminal.PTYAllocFailed"), 5*time.Second)
 	})
 }
 
@@ -3709,7 +3709,7 @@ func (pf *PanelsFrame) ExecuteDummyOp(mode int) {
 			Desc: desc,
 			Run:  runFunc,
 			OnComplete: func() {
-				vtui.ShowToast("Dummy operation finished successfully", 3*time.Second)
+				showToast("Dummy operation finished successfully", 3*time.Second)
 			},
 		})
 	} else {
@@ -4205,7 +4205,7 @@ func executeCapturedCommand(pf *PanelsFrame, action string, cmdStr string) {
 					return
 				}
 				vtui.SetClipboard(string(out))
-				vtui.ShowToast("Command output copied to clipboard", 3*time.Second)
+				showToast("Command output copied to clipboard", 3*time.Second)
 				pf.RefreshAll()
 			})
 		})

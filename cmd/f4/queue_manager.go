@@ -305,7 +305,9 @@ type OpQueueManager struct {
 }
 
 var GlobalQueueManager *OpQueueManager
-var queueShowToast = vtui.ShowToast
+var queueShowToast = func(message string, duration time.Duration) {
+	showToast(message, duration)
+}
 
 func init() {
 	GlobalQueueManager = &OpQueueManager{

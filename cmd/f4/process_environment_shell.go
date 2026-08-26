@@ -486,11 +486,11 @@ func (pf *PanelsFrame) reportProcessEnvironmentShellFailure() {
 		}
 		// The localized title is intentionally value-free: neither environment
 		// names nor values may be copied to terminal or diagnostic output.
-		vtui.ShowToast(Msg("EnvMan.ShellSyncError"), processEnvironmentFailureToastDuration)
+		toastDuration := showToast(Msg("EnvMan.ShellSyncError"), processEnvironmentFailureToastDuration)
 		// ShowToast posts its setup. Queue our timer behind that setup so the
 		// coalescing window cannot end before vtui's own expiry timer.
 		manager.PostTask(func() {
-			time.AfterFunc(processEnvironmentFailureToastDuration, func() {
+			time.AfterFunc(toastDuration, func() {
 				finishProcessEnvironmentFailureToast(done)
 			})
 		})

@@ -245,7 +245,7 @@ func aiAttachFailureReport(reportPath string) {
 		aiShowError(err)
 		return
 	}
-	vtui.ShowToast(Msg("AI.PatchReportAttached"), 3*time.Second)
+	showToast(Msg("AI.PatchReportAttached"), 3*time.Second)
 	if pf := findPanelsFrameAnyScreen(); pf != nil {
 		pf.RefreshAll()
 	}

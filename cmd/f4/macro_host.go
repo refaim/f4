@@ -238,9 +238,9 @@ func actionReloadLuaMacros() bool {
 	count, err := MacroMgr.ReloadLuaMacros(dir)
 	if err != nil {
 		vtui.DebugLog("MACRO: reload: %v", err)
-		vtui.ShowToast(fmt.Sprintf("%s (%d loaded)", Msg("Macro.ReloadFailed"), count), 3*time.Second)
+		showToast(fmt.Sprintf("%s (%d loaded)", Msg("Macro.ReloadFailed"), count), 3*time.Second)
 		return true
 	}
-	vtui.ShowToast(fmt.Sprintf(Msg("Macro.Reloaded"), count), 3*time.Second)
+	showToast(fmt.Sprintf(Msg("Macro.Reloaded"), count), 3*time.Second)
 	return true
 }

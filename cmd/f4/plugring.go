@@ -144,7 +144,7 @@ func CheckForPluginUpdates() {
 
 		if updateCount > 0 {
 			frames.PostTask(func() {
-				vtui.ShowToast(fmt.Sprintf("PlugRing: %d plugin update(s) available!", updateCount), 5*time.Second)
+				showToast(fmt.Sprintf("PlugRing: %d plugin update(s) available!", updateCount), 5*time.Second)
 			})
 		}
 	}()

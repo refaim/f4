@@ -526,7 +526,7 @@ func (ip *InfoPanel) copyCurrent() {
 			return
 		}
 		vtui.SetClipboard(r.value)
-		vtui.ShowToast(fmt.Sprintf("%s: %s", Msg("InfoPanel.Copied"), r.value), 2*time.Second)
+		showToast(fmt.Sprintf("%s: %s", Msg("InfoPanel.Copied"), r.value), 2*time.Second)
 		return
 	}
 	var lines []string
@@ -535,7 +535,7 @@ func (ip *InfoPanel) copyCurrent() {
 	}
 	joined := strings.Join(lines, "\n")
 	vtui.SetClipboard(joined)
-	vtui.ShowToast(fmt.Sprintf("%s: %d", Msg("InfoPanel.CopiedRows"), len(selRows)), 2*time.Second)
+	showToast(fmt.Sprintf("%s: %d", Msg("InfoPanel.CopiedRows"), len(selRows)), 2*time.Second)
 }
 
 func (ip *InfoPanel) Show(scr *vtui.ScreenBuf) {

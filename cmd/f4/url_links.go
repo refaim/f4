@@ -175,7 +175,7 @@ func launchExternalURLDefault(raw string) error {
 func openExternalURLAsync(raw string) {
 	go func() {
 		if err := openExternalURL(raw); err != nil {
-			vtui.ShowToast(fmt.Sprintf("Cannot open URL: %v", err), 3*time.Second)
+			showToast(fmt.Sprintf("Cannot open URL: %v", err), 3*time.Second)
 		}
 	}()
 }

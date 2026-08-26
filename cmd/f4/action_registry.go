@@ -1446,7 +1446,7 @@ func init() {
 				// Captured mode has no separate console view to switch to;
 				// output already went to a dialog, so panels stay visible.
 				pf.showPanels = true
-				vtui.ShowToast(Msg("Terminal.NotAvailableInEnv"), 3*time.Second)
+				showToast(Msg("Terminal.NotAvailableInEnv"), 3*time.Second)
 			default:
 				vtui.FrameManager.HardRefresh()
 			}
@@ -2282,7 +2282,7 @@ func init() {
 			AppConfig.EditorDefaultCodePage = next
 			SaveConfig()
 			ev.ReloadWithCodepage(next)
-			vtui.ShowToast(fmt.Sprintf("Codepage: %s", vfs.DisplayCodepageName(next)), time.Second)
+			showToast(fmt.Sprintf("Codepage: %s", vfs.DisplayCodepageName(next)), time.Second)
 		}),
 	})
 	RegisterAction(Action{
@@ -2472,7 +2472,7 @@ func init() {
 			AppConfig.ViewerDefaultCodePage = next
 			SaveConfig()
 			vv.ReloadWithCodepage(next)
-			vtui.ShowToast(fmt.Sprintf("Codepage: %s", vfs.DisplayCodepageName(next)), time.Second)
+			showToast(fmt.Sprintf("Codepage: %s", vfs.DisplayCodepageName(next)), time.Second)
 		}),
 	})
 	RegisterAction(Action{

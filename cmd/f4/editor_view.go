@@ -4580,7 +4580,7 @@ func (ev *EditorView) showConvertCodepageDialog() {
 				ev.codepageRaw = nil
 				ev.Codepage = cpID
 				ev.modified = true
-				vtui.ShowToast(fmt.Sprintf("Will be saved as: %s", vfs.DisplayCodepageName(cpID)), 2*time.Second)
+				showToast(fmt.Sprintf("Will be saved as: %s", vfs.DisplayCodepageName(cpID)), 2*time.Second)
 				ev.updateDesiredVisualCol()
 				ev.ensureCursorVisible()
 				vtui.FrameManager.Redraw()
