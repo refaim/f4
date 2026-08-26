@@ -619,24 +619,22 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { target: windows/amd64 }
-          # Linux release builds carry goffi_static, so vet the files the build
-          # actually compiles -- the stubs, not the dlopen wrappers.
-          - { target: linux/arm, tags: goffi_static }
-          # ...and the musl cells carry goffi_musl, which compiles the real
-          # dlopen wrappers instead of those stubs. Nothing else in this
-          # matrix vets that code on Linux.
-          - { target: linux/amd64, tags: goffi_musl, gcflags: -gcflags=github.com/go-webgpu/goffi/internal/dl=-std }
-          - { target: darwin/arm64 }
-          # goffi's fakecgo shim needs the same flag the build step passes.
-          - { target: freebsd/amd64, gcflags: -gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std }
-          - { target: openbsd/amd64 }
-          - { target: netbsd/amd64 }
-          - { target: dragonfly/amd64 }
-          - { target: illumos/amd64 }
-          - { target: solaris/amd64 }
+      # Cell notes, in full-matrix order:
+      # - linux/arm carries goffi_static: Linux release builds use it, so vet
+      #   the files the build actually compiles -- the stubs, not the dlopen
+      #   wrappers. The only arm32 compile anywhere in a PR run, so it is the
+      #   one cell PRs keep.
+      # - linux/amd64 carries goffi_musl, which compiles the real dlopen
+      #   wrappers instead of those stubs; nothing else vets that code on
+      #   Linux. The gcflags mirror the build step (same for freebsd's
+      #   fakecgo shim below).
+      # Pull requests run only the linux/arm cell: every other target is
+      # already compiled in the same PR run by its build and test jobs (and
+      # go test runs vet's high-confidence checks natively), or -- for the
+      # BSDs/illumos/solaris -- is exotic enough to check on pushes and tags,
+      # like their builds. The full matrix runs everywhere else. One long
+      # line on purpose: actionlint chews minutes on a folded variant.
+      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"target":"linux/arm","tags":"goffi_static"}]}') || fromJSON('{"include":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_musl","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/dl=-std"},{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"openbsd/amd64"},{"target":"netbsd/amd64"},{"target":"dragonfly/amd64"},{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}') }}
     env:
       CGO_ENABLED: 0
     steps:
