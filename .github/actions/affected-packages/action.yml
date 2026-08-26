@@ -6,10 +6,6 @@ description: >-
   cannot be safely attributed to a package (go.mod, the workflow itself,
   submodule bumps, unknown files) -- guessing wrong here would silently
   skip real tests, so every doubt falls back to the full run.
-inputs:
-  base-sha:
-    description: Base commit of the pull request (github.event.pull_request.base.sha)
-    required: true
 outputs:
   packages:
     description: Space-separated import paths to test, or the literal "all"
@@ -19,8 +15,6 @@ runs:
   steps:
     - id: calc
       shell: bash
-      env:
-        BASE_SHA: ${{ inputs.base-sha }}
       run: |
         set -euo pipefail
 
@@ -30,13 +24,19 @@ runs:
           all "not a pull request"
         fi
 
-        # The PR checkout is the shallow merge commit; its first parent is
-        # the base branch head, so a two-dot diff against the fetched base
-        # is exactly what the PR changes. No arrays or mapfile anywhere in
-        # this script: macOS runners resolve `shell: bash` to the system
-        # bash 3.2. Paths in this repository contain no spaces.
-        git fetch --quiet --depth=1 origin "$BASE_SHA" || all "base fetch failed"
-        files=$(git diff --name-only "$BASE_SHA" HEAD)
+        # Diff against the CURRENT head of the base branch, fetched by name.
+        # Not github.event.pull_request.base.sha: that is frozen at PR
+        # creation time, so after any push to the base branch it drags the
+        # base's own changes into the diff forever. The checkout is the
+        # shallow merge commit (base + PR), so if the base has not moved
+        # since the event this two-dot diff is exactly the PR's changes; if
+        # it has moved, the diff gains base-side noise, which can only widen
+        # the result toward "all" -- the safe direction. No arrays or
+        # mapfile anywhere in this script: macOS runners resolve
+        # `shell: bash` to the system bash 3.2. Paths in this repository
+        # contain no spaces.
+        git fetch --quiet --depth=1 origin "refs/heads/$GITHUB_BASE_REF" || all "base fetch failed"
+        files=$(git diff --name-only FETCH_HEAD HEAD)
         [ -n "$files" ] || all "empty diff"
 
         dirs=""

@@ -801,8 +801,6 @@ jobs:
     - name: Compute affected packages
       id: affected
       uses: ./.github/actions/affected-packages
-      with:
-        base-sha: ${{ github.event.pull_request.base.sha || github.sha }}
 
     - name: Run Tests
       shell: bash
@@ -945,8 +943,6 @@ jobs:
     - name: Compute affected packages
       id: affected
       uses: ./.github/actions/affected-packages
-      with:
-        base-sha: ${{ github.event.pull_request.base.sha || github.sha }}
 
     - name: Run race detector
       shell: bash
