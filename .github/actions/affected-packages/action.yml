@@ -32,13 +32,15 @@ runs:
 
         # The PR checkout is the shallow merge commit; its first parent is
         # the base branch head, so a two-dot diff against the fetched base
-        # is exactly what the PR changes.
+        # is exactly what the PR changes. No arrays or mapfile anywhere in
+        # this script: macOS runners resolve `shell: bash` to the system
+        # bash 3.2. Paths in this repository contain no spaces.
         git fetch --quiet --depth=1 origin "$BASE_SHA" || all "base fetch failed"
-        mapfile -t files < <(git diff --name-only "$BASE_SHA" HEAD)
-        [ ${#files[@]} -gt 0 ] || all "empty diff"
+        files=$(git diff --name-only "$BASE_SHA" HEAD)
+        [ -n "$files" ] || all "empty diff"
 
-        dirs=()
-        for f in "${files[@]}"; do
+        dirs=""
+        while IFS= read -r f; do
           case "$f" in
             go.mod|go.sum|vtui|vtinput|.github/*|.golangci*)
               all "$f changes what every package sees" ;;
@@ -46,17 +48,17 @@ runs:
               # Language files, help pages, icons and testdata are read by
               # cmd/f4's tests at run time; attribute the whole subtree to
               # the package rather than reasoning per file type.
-              dirs+=("cmd/f4") ;;
+              dirs="$dirs cmd/f4" ;;
             */testdata/*)
-              dirs+=("${f%%/testdata/*}") ;;
+              dirs="$dirs ${f%%/testdata/*}" ;;
             *.go)
-              dirs+=("$(dirname "$f")") ;;
+              dirs="$dirs $(dirname "$f")" ;;
             *)
               all "cannot attribute $f to a package" ;;
           esac
-        done
+        done <<<"$files"
 
-        changed=$(printf './%s\n' "${dirs[@]}" | sort -u | xargs go list 2>/dev/null) \
+        changed=$(printf './%s\n' $dirs | sort -u | xargs go list 2>/dev/null) \
           || all "changed path is not a package"
 
         # Two passes over one package listing. Deps is already transitive,
