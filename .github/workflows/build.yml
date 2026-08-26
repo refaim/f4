@@ -261,6 +261,7 @@ jobs:
       if: matrix.goos == 'linux'
       env:
         GOARCH_CELL: ${{ matrix.goarch }}
+        QEMU_SMOKE: ${{ github.event_name != 'pull_request' }}
       run: |
         set -euo pipefail
 
@@ -306,6 +307,18 @@ jobs:
           if [ "$needed" != "libc.musl-${MUSL_ARCH}.so.1" ]; then
             echo "::error::DT_NEEDED is '$needed', expected exactly libc.musl-${MUSL_ARCH}.so.1"
             exit 1
+          fi
+
+          # The readelf assertions above catch the realistic breakage (the
+          # tag not applying, a glibc SONAME leaking in) and cost nothing.
+          # The rest of this branch -- executing the artifact against real
+          # musl and the flavor-specific updater tests -- guards what gets
+          # *published*, so it rides with pushes and tags, where the nightly
+          # and release jobs actually publish; a red run there blocks them
+          # via needs. Skipping it keeps ~40 seconds off every PR.
+          if [ "$QEMU_SMOKE" != "true" ]; then
+            echo "Pull request: readelf assertions only."
+            exit 0
           fi
 
           # Now actually start it, against a real musl libc. qemu-user
