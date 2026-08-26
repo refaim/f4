@@ -1,3 +1,4 @@
+// CI selective-testing probe; delete me.
 package sqlite
 
 import "github.com/unxed/vtui"
