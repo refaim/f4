@@ -711,16 +711,17 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        # One hosted runner per native os/arch cell, labeled to match the
-        # build matrix.
-        include:
-          - { os: ubuntu-latest,    target: linux/amd64 }
-          - { os: ubuntu-24.04-arm, target: linux/arm64 }
-          - { os: macos-latest,     target: darwin/arm64 }
-          - { os: macos-15-intel,   target: darwin/amd64 }
-          - { os: windows-latest,   target: windows/amd64 }
-          - { os: windows-11-arm,   target: windows/arm64 }
+      # One hosted runner per native os/arch cell, labeled to match the
+      # build matrix. Pull requests skip the second-arch twin of the two
+      # desktop OSes: darwin/amd64 and windows/arm64 run on the slowest
+      # runners of the whole matrix (4-5 minutes against the ~2:40 the
+      # rest of a PR run takes) and only catch arch-specific breakage --
+      # rare enough to test on pushes, tags and manual runs, which is
+      # also where the published artifacts come from. linux/arm64 stays
+      # everywhere: its runner is fast. Inline conditional rather than a
+      # plan-job output because these jobs are the critical path, and a
+      # needs: edge would bill its scheduling latency to every cell.
+      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64"},{"os":"windows-latest","target":"windows/amd64"}]}') || fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64"},{"os":"macos-15-intel","target":"darwin/amd64"},{"os":"windows-latest","target":"windows/amd64"},{"os":"windows-11-arm","target":"windows/arm64"}]}') }}
     env:
       CGO_ENABLED: 0
       TEST_SHUFFLE: ${{ inputs.shuffle || 'on' }}
