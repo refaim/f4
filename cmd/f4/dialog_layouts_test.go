@@ -156,6 +156,9 @@ func TestAllDialogs_LayoutValidation(t *testing.T) {
 	}
 	t.Cleanup(func() { runPanelMountTask = oldMountTaskRunner })
 
+	rig := newDialogLayoutRig(t, tmpDir)
+	defer rig.close(t)
+
 	// Complex-script widths are handled by vtui's grapheme-cell shaping.
 	for _, act := range GetActions() {
 		name := act.Name
@@ -176,68 +179,22 @@ func TestAllDialogs_LayoutValidation(t *testing.T) {
 					vtui.AddStrings(pack.Strings)
 				}
 
-				errs := func() []error {
-					// Re-init FrameManager and Screen for each language pass.
-					scr := vtui.NewSilentScreenBuf()
-					scr.AllocBuf(120, 60)
-					manager := vtui.FrameManager
-					manager.Init(scr)
+				var errs []error
+				if dialogLayoutActionNeedsFreshRig(name) {
+					errs = func() []error {
+						rig.detach(t)
+						defer rig.attach()
 
-					// Create and push a dummy PanelsFrame so context-aware actions find it.
-					localVFS := vfs.NewOSVFS(tmpDir)
-					_ = localVFS.SetPath(tmpDir)
-					pf := NewPanelsFrame()
-					left := NewFileSystemPanel(0, 0, 40, 20, localVFS)
-					right := NewFileSystemPanel(40, 0, 40, 20, localVFS.Clone())
-					waitForLoad(t, left)
-					waitForLoad(t, right)
-					pf.panels[0] = left
-					pf.panels[1] = right
-					pf.ResizeConsole(120, 60)
-					waitForLoad(t, pf.panels[0].(*FileSystemPanel))
-					waitForLoad(t, pf.panels[1].(*FileSystemPanel))
-					manager.Push(pf)
-					defer func() {
-						waitForDirectoryLoads(t)
-						// This includes the PanelsFrame and every dialog added by the action.
-						closeFrameManagerFrames(manager)
+						fresh := newDialogLayoutRig(t, tmpDir)
+						defer fresh.close(t)
+						return fresh.validateAction(t, act, name, srcFile, rules)
 					}()
-
-					// Setup editor/viewer context if testing editor/viewer actions.
-					if strings.HasPrefix(name, "Editor.") {
-						showEditor(pf, localVFS, srcFile, &vfs.MemoryReadAtCloser{Data: []byte("dummy")})
-					} else if strings.HasPrefix(name, "Viewer.") {
-						vv, err := NewViewerView(context.Background(), localVFS, srcFile)
-						if err == nil {
-							showViewer(pf, vv, srcFile)
-						}
-					}
-
-					initialCount := len(manager.Screens[manager.ActiveIdx].Frames)
-
-					// Trigger the action handler.
-					act.Handler()
-					waitForLoad(t, pf.panels[0].(*FileSystemPanel))
-					waitForLoad(t, pf.panels[1].(*FileSystemPanel))
-					if manager.GetActiveToast() != "" {
-						waitForToastExpiry(t, 6*time.Second)
-					}
-
-					frames := manager.Screens[manager.ActiveIdx].Frames
-					if len(frames) <= initialCount {
-						// Many actions are silent and do not open a dialog (e.g. Editor.Save).
-						// This is completely expected, so skip validation for this pass.
-						return nil
-					}
-
-					// Check if the top-most frame is a container. If not (e.g. raw drawing view), skip it safely.
-					topFrame := frames[len(frames)-1]
-					container, ok := topFrame.(vtui.Container)
-					if !ok {
-						return nil
-					}
-					return vtui.ValidateLayoutWithRules(container, rules)
-				}()
+				} else {
+					errs = func() []error {
+						defer rig.reset(t)
+						return rig.validateAction(t, act, name, srcFile, rules)
+					}()
+				}
 
 				packName := pack.Name
 				if packName == "" {
@@ -252,5 +209,177 @@ func TestAllDialogs_LayoutValidation(t *testing.T) {
 				t.Errorf("Layout validation failed for Action %s:\n%s", name, strings.Join(msgs, "\n"))
 			}
 		})
+	}
+}
+
+type dialogLayoutRig struct {
+	manager    *vtui.FrameManagerType
+	screen     *vtui.ScreenBuf
+	baseScreen *vtui.AppScreen
+	panels     *PanelsFrame
+	localVFS   vfs.VFS
+}
+
+func newDialogLayoutRig(t *testing.T, dir string) *dialogLayoutRig {
+	t.Helper()
+	screen := vtui.NewSilentScreenBuf()
+	screen.AllocBuf(120, 60)
+	manager := vtui.FrameManager
+	manager.Init(screen)
+
+	localVFS := vfs.NewOSVFS(dir)
+	if err := localVFS.SetPath(dir); err != nil {
+		t.Fatal(err)
+	}
+	panels := NewPanelsFrame()
+	left := NewFileSystemPanel(0, 0, 40, 20, localVFS)
+	right := NewFileSystemPanel(40, 0, 40, 20, localVFS.Clone())
+	waitForLoad(t, left)
+	waitForLoad(t, right)
+	panels.panels[0] = left
+	panels.panels[1] = right
+	panels.ResizeConsole(120, 60)
+	waitForLoad(t, panels.panels[0].(*FileSystemPanel))
+	waitForLoad(t, panels.panels[1].(*FileSystemPanel))
+	manager.Push(panels)
+
+	return &dialogLayoutRig{
+		manager:    manager,
+		screen:     screen,
+		baseScreen: manager.Screens[manager.ActiveIdx],
+		panels:     panels,
+		localVFS:   localVFS,
+	}
+}
+
+func (rig *dialogLayoutRig) validateAction(t *testing.T, act Action, name, srcFile string, rules vtui.LayoutRules) []error {
+	t.Helper()
+	if strings.HasPrefix(name, "Editor.") {
+		showEditor(rig.panels, rig.localVFS, srcFile, &vfs.MemoryReadAtCloser{Data: []byte("dummy")})
+	} else if strings.HasPrefix(name, "Viewer.") {
+		viewer, err := NewViewerView(context.Background(), rig.localVFS, srcFile)
+		if err == nil {
+			showViewer(rig.panels, viewer, srcFile)
+		}
+	}
+
+	initialCount := len(rig.manager.Screens[rig.manager.ActiveIdx].Frames)
+	act.Handler()
+	waitForLoad(t, rig.panels.panels[0].(*FileSystemPanel))
+	waitForLoad(t, rig.panels.panels[1].(*FileSystemPanel))
+	if rig.manager.GetActiveToast() != "" {
+		waitForToastExpiry(t, 6*time.Second)
+	}
+
+	frames := rig.manager.Screens[rig.manager.ActiveIdx].Frames
+	if len(frames) <= initialCount {
+		// Many actions are silent and do not open a dialog (e.g. Editor.Save).
+		// This is completely expected, so skip validation for this pass.
+		return nil
+	}
+
+	// Check if the top-most frame is a container. If not (e.g. raw drawing view), skip it safely.
+	topFrame := frames[len(frames)-1]
+	container, ok := topFrame.(vtui.Container)
+	if !ok {
+		return nil
+	}
+	return vtui.ValidateLayoutWithRules(container, rules)
+}
+
+func (rig *dialogLayoutRig) reset(t *testing.T) {
+	t.Helper()
+	waitForDirectoryLoads(t)
+
+	baseIdx := -1
+	for i, screen := range rig.manager.Screens {
+		if screen == rig.baseScreen {
+			baseIdx = i
+			continue
+		}
+		closeFrameManagerScreens([]*vtui.AppScreen{screen})
+	}
+	if baseIdx < 0 {
+		t.Fatal("layout validation action removed the shared panels workspace")
+	}
+
+	// Drop any editor/viewer or action-created workspaces without rebuilding
+	// the shared panel fixture. Their frames have already been closed above.
+	for i := len(rig.manager.Screens) - 1; i >= 0; i-- {
+		if rig.manager.Screens[i] == rig.baseScreen {
+			continue
+		}
+		before := len(rig.manager.Screens)
+		rig.manager.CloseScreen(i)
+		if len(rig.manager.Screens) != before-1 {
+			t.Fatal("layout validation action left an extra workspace that could not be closed")
+		}
+	}
+
+	for i, screen := range rig.manager.Screens {
+		if screen == rig.baseScreen {
+			baseIdx = i
+			break
+		}
+	}
+	rig.manager.SwitchScreen(baseIdx)
+	frames := append([]vtui.Frame(nil), rig.baseScreen.Frames...)
+	foundPanels := false
+	for i := len(frames) - 1; i >= 0; i-- {
+		frame := frames[i]
+		if frame == rig.panels {
+			foundPanels = true
+			continue
+		}
+		frame.Close()
+		rig.manager.RemoveFrame(frame)
+	}
+	if !foundPanels || rig.panels.IsDone() {
+		t.Fatal("layout validation action mutated the shared panels frame")
+	}
+}
+
+func (rig *dialogLayoutRig) detach(t *testing.T) {
+	t.Helper()
+	// The next rig reinitializes the global manager. Clipboard workers read
+	// that global asynchronously, so join them at this lifecycle boundary.
+	waitForAsyncClipboard()
+	rig.reset(t)
+}
+
+func (rig *dialogLayoutRig) attach() {
+	rig.manager.Init(rig.screen)
+	rig.manager.Push(rig.panels)
+	rig.baseScreen = rig.manager.Screens[rig.manager.ActiveIdx]
+}
+
+func (rig *dialogLayoutRig) close(t *testing.T) {
+	t.Helper()
+	waitForAsyncClipboard()
+	waitForDirectoryLoads(t)
+	closeFrameManagerFrames(rig.manager)
+}
+
+// These handlers change the reusable PanelsFrame itself (or stop/close its
+// manager). Keeping their old per-combination freshness avoids making a later
+// action or translation depend on that mutation; ordinary actions share the
+// expensive VFS and panels fixture above.
+func dialogLayoutActionNeedsFreshRig(name string) bool {
+	name = strings.ToLower(name)
+	if strings.HasPrefix(name, "panel.left.") || strings.HasPrefix(name, "panel.right.") {
+		return true
+	}
+	switch name {
+	case "ai.togglepanel",
+		"app.background",
+		"panel.goparent",
+		"panel.goroot",
+		"panel.insertpath",
+		"panel.selectnavigation",
+		"panel.togglecommandlinefocus",
+		"workspace.close":
+		return true
+	default:
+		return false
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -382,6 +383,16 @@ func commandPaletteParseProductionGo(t *testing.T) []commandPaletteParsedGo {
 			return walkErr
 		}
 		if entry.IsDir() {
+			if path != root {
+				// Nested repositories and worktrees are not module production
+				// sources. Skipping their .git marker keeps local worktree copies
+				// (commonly under _work/) from duplicating this inventory.
+				if _, markerErr := os.Lstat(filepath.Join(path, ".git")); markerErr == nil {
+					return fs.SkipDir
+				} else if !os.IsNotExist(markerErr) {
+					return markerErr
+				}
+			}
 			switch entry.Name() {
 			case ".git", "testdata", "vendor":
 				if path != root {
