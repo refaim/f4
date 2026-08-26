@@ -10,6 +10,9 @@ outputs:
   packages:
     description: Space-separated import paths to test, or the literal "all"
     value: ${{ steps.calc.outputs.packages }}
+  build:
+    description: Whether the diff affects code included in a compiled binary
+    value: ${{ steps.calc.outputs.build }}
 runs:
   using: composite
   steps:
@@ -18,7 +21,7 @@ runs:
       run: |
         set -euo pipefail
 
-        all() { echo "packages=all" >> "$GITHUB_OUTPUT"; echo "affected: all ($1)"; exit 0; }
+        all() { echo "packages=all" >> "$GITHUB_OUTPUT"; echo "build=yes" >> "$GITHUB_OUTPUT"; echo "affected: all ($1)"; exit 0; }
 
         if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
           all "not a pull request"
@@ -58,6 +61,54 @@ runs:
           esac
         done <<<"$files"
 
+        # Classify build impact separately from test impact above. Tests and
+        # testdata never enter a shipped binary; cmd/f4's other files always
+        # do because that package embeds non-Go resources. For Go elsewhere,
+        # resolve the owning package and check only main packages' production
+        # dependency graph -- Deps deliberately excludes test imports.
+        build=no
+        build_all() { build=yes; echo "build affected: yes ($1)"; }
+        build_dirs=""
+        while IFS= read -r f; do
+          case "$f" in
+            *_test.go|*/testdata/*)
+              ;;
+            cmd/f4/*)
+              build=yes ;;
+            *.go)
+              build_dirs="$build_dirs $(dirname "$f")" ;;
+            *)
+              build_all "cannot attribute $f to a compiled binary" ;;
+          esac
+        done <<<"$files"
+
+        if [ "$build" != "yes" ] && [ -n "$build_dirs" ]; then
+          build_changed=$(printf './%s\n' $build_dirs | sort -u | xargs go list 2>/dev/null) \
+            || build_all "changed build path is not a package"
+          if [ "$build" != "yes" ]; then
+            mains=$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./...) \
+              || build_all "cannot list main packages"
+          fi
+          if [ "$build" != "yes" ] && [ -z "$mains" ]; then
+            build_all "no main packages"
+          fi
+          if [ "$build" != "yes" ]; then
+            production=$(printf '%s\n' "$mains" \
+              | xargs go list -f '{{.ImportPath}} {{join .Deps " "}}' \
+              | tr ' ' '\n' | sed '/^$/d' | sort -u) \
+              || build_all "cannot list production dependencies"
+          fi
+
+          if [ "$build" != "yes" ]; then
+            while IFS= read -r pkg; do
+              if grep -Fqx "$pkg" <<<"$production"; then
+                build=yes
+                break
+              fi
+            done <<<"$build_changed"
+          fi
+        fi
+
         changed=$(printf './%s\n' $dirs | sort -u | xargs go list 2>/dev/null) \
           || all "changed path is not a package"
 
@@ -83,6 +134,8 @@ runs:
               }
             }')
 
+        echo "build=$build" >> "$GITHUB_OUTPUT"
+        echo "build affected: $build"
         [ -n "$affected" ] || { echo "packages=" >> "$GITHUB_OUTPUT"; echo "affected: none"; exit 0; }
         echo "packages=$(tr '\n' ' ' <<<"$affected" | sed 's/ $//')" >> "$GITHUB_OUTPUT"
         echo "affected: $(wc -l <<<"$affected" | tr -d ' ') of $(go list ./... | wc -l | tr -d ' ') packages"

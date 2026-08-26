@@ -124,9 +124,15 @@ jobs:
         go-version: '1.26.6'
         cache-dependency-path: go.sum
 
+    - name: Compute build impact
+      id: affected
+      uses: ./.github/actions/affected-packages
+
     - name: Check formatting
       # The musl amd64 cell builds the same tree as the generic amd64
       # cell, so these repo-wide checks belong to one of them, not both.
+      # Deliberately not gated on build impact: gofmt covers test files too,
+      # so a tests-only pull request still needs this check.
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64' && matrix.libc != 'musl'
       run: |
         if [ -n "$(gofmt -s -l .)" ]; then
@@ -139,13 +145,13 @@ jobs:
     - name: Check language file formatting
       # The musl amd64 cell builds the same tree as the generic amd64
       # cell, so these repo-wide checks belong to one of them, not both.
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64' && matrix.libc != 'musl'
+      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux' && matrix.goarch == 'amd64' && matrix.libc != 'musl'
       run: go run ./tools/langfmt -check cmd/f4/lang/*.lng
 
     - name: Verify generated application icons
       # The musl amd64 cell builds the same tree as the generic amd64
       # cell, so these repo-wide checks belong to one of them, not both.
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64' && matrix.libc != 'musl'
+      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux' && matrix.goarch == 'amd64' && matrix.libc != 'musl'
       run: |
         go generate ./cmd/f4
         git diff --exit-code -- \
@@ -154,6 +160,7 @@ jobs:
           cmd/f4/rsrc_windows_arm64.syso
 
     - name: Build binaries
+      if: steps.affected.outputs.build == 'yes'
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
@@ -258,7 +265,7 @@ jobs:
     # dependency cannot actually handle. --version returns before any
     # terminal setup, so no tty is needed.
     - name: Smoke test the binary
-      if: matrix.goos == 'linux'
+      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux'
       env:
         GOARCH_CELL: ${{ matrix.goarch }}
         QEMU_SMOKE: ${{ github.event_name != 'pull_request' }}
@@ -378,6 +385,7 @@ jobs:
         "qemu-$QEMU-static" build/f4 --version
 
     - name: Package
+      if: steps.affected.outputs.build == 'yes'
       run: |
         if [ "${{ matrix.goos }}" = "windows" ]; then
           (cd build && zip -r "../$ASSET.zip" .)
@@ -404,6 +412,7 @@ jobs:
         fi
 
     - name: Upload Artifact
+      if: steps.affected.outputs.build == 'yes'
       uses: actions/upload-artifact@v7
       with:
         name: ${{ env.ASSET }}
@@ -440,7 +449,18 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: go.sum
+
+    - name: Compute build impact
+      id: affected
+      uses: ./.github/actions/affected-packages
+
     - name: Download go-legacy-win7 toolchain
+      if: steps.affected.outputs.build == 'yes'
       run: |
         set -euo pipefail
         curl -fL --retry 5 --retry-delay 10 --retry-all-errors \
@@ -453,6 +473,7 @@ jobs:
         echo "$HOME/go-legacy-win7/go-legacy-win7/bin" >> "$GITHUB_PATH"
 
     - name: Restore missing sync/atomic Or/And methods (thongtech/go-legacy-win7#13)
+      if: steps.affected.outputs.build == 'yes'
       run: |
         cat > "$GOROOT/src/sync/atomic/or_and_win7compat.go" <<'EOF'
         // This file restores the Or/And methods on typed atomics (added
@@ -555,6 +576,7 @@ jobs:
         EOF
 
     - name: Build binaries
+      if: steps.affected.outputs.build == 'yes'
       run: |
         mkdir -p build/plugins/dummy_internal
         LDFLAGS="-s -w"
@@ -576,9 +598,11 @@ jobs:
         go build -trimpath -ldflags="$LDFLAGS" -o ../../build/plugins/dummy_internal/f4-internal-dummy-plugin.exe .
 
     - name: Package
+      if: steps.affected.outputs.build == 'yes'
       run: (cd build && zip -r ../f4-windows7-amd64.zip .)
 
     - name: Upload Artifact
+      if: steps.affected.outputs.build == 'yes'
       uses: actions/upload-artifact@v7
       with:
         name: f4-windows7-amd64
