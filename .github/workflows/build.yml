@@ -747,13 +747,15 @@ jobs:
       uses: actions/setup-go@v7
       with:
         go-version: '1.26.6'
-        # This workflow file is part of the key on purpose: the cache stores
+        # The salt file is part of the key on purpose: the cache stores
         # absolute paths, so a cache saved before a GOCACHE/GOMODCACHE move
         # above would restore to the old location -- and with the key
         # unchanged, setup-go would see a "hit" and never save a good one.
+        # A salt rather than this workflow file, so that ordinary CI edits
+        # do not rotate every test cell into a cold compile.
         cache-dependency-path: |
           go.sum
-          .github/workflows/build.yml
+          .github/workflows/go-cache-salt
 
     - name: Run Tests
       shell: bash
@@ -861,7 +863,7 @@ jobs:
         path: |
           ~/.cache/go-build
           ~/go/pkg/mod
-        key: race-${{ matrix.cache-key }}-go-${{ hashFiles('go.sum', '.github/workflows/build.yml') }}
+        key: race-${{ matrix.cache-key }}-go-${{ hashFiles('go.sum') }}
         restore-keys: |
           race-${{ matrix.cache-key }}-go-
 
