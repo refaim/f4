@@ -23,7 +23,7 @@ on:
         type: string
 
 # A newer push supersedes the run in flight: with ~30 jobs per run and 20
-# concurrent runners on the free plan, two overlapping runs queue each other
+# concurrent runners on the free tier, two overlapping runs queue each other
 # into waves. Tag pushes publish releases, so those runs are never cancelled;
 # each tag is its own group anyway.
 concurrency:
@@ -31,79 +31,19 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  # The build matrix is data, not YAML: pull requests build only the cells
-  # whose artifacts anyone actually downloads from a PR (the three desktop
-  # platforms plus the musl flavor), while pushes to main, tags and manual
-  # runs build everything the release ships. Compilation of the exotic
-  # targets is still checked on every PR by the vet matrix below, which is
-  # what a cross-build of a platform nobody can execute proves anyway.
-  plan:
-    name: Plan build matrix
-    runs-on: ubuntu-latest
-    steps:
-    - name: Emit build matrix
-      id: emit
-      env:
-        FULL: ${{ github.event_name != 'pull_request' }}
-      run: |
-        # Cells beyond the desktop six:
-        # - The noffi rows are the extra architectures Go can cross-compile
-        #   Linux for; vtui's graphical/FFI backends are unavailable there,
-        #   so they use its ANSI-only noffi configuration.
-        # - The musl rows (Alpine, postmarketOS, ...) link against musl's
-        #   libc and keep FFI, unlike the fully static generic Linux cells;
-        #   built with -tags goffi_musl, see docs/MUSL.md in unxed/goffi.
-        cells='[
-          {"goos":"linux","goarch":"amd64"},
-          {"goos":"linux","goarch":"arm64"},
-          {"goos":"linux","goarch":"arm"},
-          {"goos":"windows","goarch":"amd64"},
-          {"goos":"windows","goarch":"arm64"},
-          {"goos":"darwin","goarch":"amd64"},
-          {"goos":"darwin","goarch":"arm64"},
-          {"goos":"freebsd","goarch":"amd64"},
-          {"goos":"freebsd","goarch":"arm64"},
-          {"goos":"dragonfly","goarch":"amd64"},
-          {"goos":"openbsd","goarch":"amd64"},
-          {"goos":"openbsd","goarch":"arm64"},
-          {"goos":"netbsd","goarch":"amd64"},
-          {"goos":"netbsd","goarch":"arm64"},
-          {"goos":"illumos","goarch":"amd64"},
-          {"goos":"solaris","goarch":"amd64"},
-          {"goos":"linux","goarch":"386","build_tags":"noffi"},
-          {"goos":"linux","goarch":"mips","build_tags":"noffi"},
-          {"goos":"linux","goarch":"mipsle","build_tags":"noffi"},
-          {"goos":"linux","goarch":"mips64","build_tags":"noffi"},
-          {"goos":"linux","goarch":"mips64le","build_tags":"noffi"},
-          {"goos":"linux","goarch":"riscv64","build_tags":"noffi"},
-          {"goos":"linux","goarch":"loong64","build_tags":"noffi"},
-          {"goos":"linux","goarch":"ppc64","build_tags":"noffi"},
-          {"goos":"linux","goarch":"ppc64le","build_tags":"noffi"},
-          {"goos":"linux","goarch":"amd64","libc":"musl"},
-          {"goos":"linux","goarch":"arm64","libc":"musl"}
-        ]'
-        if [ "$FULL" != "true" ]; then
-          # Desktop platforms on release architectures; this also keeps the
-          # two musl cells and drops every noffi row.
-          cells=$(jq -c '[ .[] | select(
-            (.goos == "linux" or .goos == "windows" or .goos == "darwin")
-            and (.goarch == "amd64" or .goarch == "arm64")
-          ) ]' <<<"$cells")
-        fi
-        echo "matrix=$(jq -c '{include: .}' <<<"$cells")" >> "$GITHUB_OUTPUT"
-    outputs:
-      matrix: ${{ steps.emit.outputs.matrix }}
-
+  # The build matrix is deliberately inline data. Pull requests build all
+  # eight cells because those are the artifacts anyone actually downloads
+  # from a PR: six desktop OS/architecture pairs plus two musl flavors.
+  # Exotic targets live in build-batch below and run outside pull requests.
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }}${{ matrix.libc == 'musl' && ' musl' || '' }})
     runs-on: ubuntu-latest
-    needs: plan
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+      matrix: { include: [{ goos: linux, goarch: amd64 }, { goos: linux, goarch: arm64 }, { goos: windows, goarch: amd64 }, { goos: windows, goarch: arm64 }, { goos: darwin, goarch: amd64 }, { goos: darwin, goarch: arm64 }, { goos: linux, goarch: amd64, libc: musl }, { goos: linux, goarch: arm64, libc: musl }] }
     env:
       CGO_ENABLED: 0
-      BUILD_TAGS: ${{ matrix.build_tags || '' }}
+      BUILD_TAGS: ''
       LIBC: ${{ matrix.libc || '' }}
       # Artifact and archive basename. The musl cells build the same
       # GOOS/GOARCH pair as the generic Linux cells, so they need a name of
@@ -419,6 +359,211 @@ jobs:
         path: ${{ env.ASSET }}.*
         retention-days: 7
 
+  # Build and vet cells are batched in groups of up to three: enough
+  # parallelism to keep elapsed time down while amortizing per-job checkout
+  # and toolchain setup (~50s), which cost more than the actual cross-build.
+  build-batch:
+    name: Build batch (${{ matrix.name }})
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # The noffi rows are the extra architectures Go can cross-compile
+      # Linux for; vtui's graphical/FFI backends are unavailable there,
+      # so they use its ANSI-only noffi configuration.
+      # One long line on purpose: actionlint chews minutes on a folded variant.
+      matrix: ${{ fromJSON('{"include":[{"name":"linux/386, linux/mips, linux/mipsle","cells":[{"goos":"linux","goarch":"386","build_tags":"noffi"},{"goos":"linux","goarch":"mips","build_tags":"noffi"},{"goos":"linux","goarch":"mipsle","build_tags":"noffi"}],"assets":["f4-linux-386","f4-linux-mips","f4-linux-mipsle"]},{"name":"linux/mips64, linux/mips64le, linux/riscv64","cells":[{"goos":"linux","goarch":"mips64","build_tags":"noffi"},{"goos":"linux","goarch":"mips64le","build_tags":"noffi"},{"goos":"linux","goarch":"riscv64","build_tags":"noffi"}],"assets":["f4-linux-mips64","f4-linux-mips64le","f4-linux-riscv64"]},{"name":"linux/loong64, linux/ppc64, linux/ppc64le","cells":[{"goos":"linux","goarch":"loong64","build_tags":"noffi"},{"goos":"linux","goarch":"ppc64","build_tags":"noffi"},{"goos":"linux","goarch":"ppc64le","build_tags":"noffi"}],"assets":["f4-linux-loong64","f4-linux-ppc64","f4-linux-ppc64le"]},{"name":"linux/arm, freebsd/amd64, freebsd/arm64","cells":[{"goos":"linux","goarch":"arm"},{"goos":"freebsd","goarch":"amd64"},{"goos":"freebsd","goarch":"arm64"}],"assets":["f4-linux-arm","f4-freebsd-amd64","f4-freebsd-arm64"]},{"name":"dragonfly/amd64, openbsd/amd64, openbsd/arm64","cells":[{"goos":"dragonfly","goarch":"amd64"},{"goos":"openbsd","goarch":"amd64"},{"goos":"openbsd","goarch":"arm64"}],"assets":["f4-dragonfly-amd64","f4-openbsd-amd64","f4-openbsd-arm64"]},{"name":"netbsd/amd64, netbsd/arm64","cells":[{"goos":"netbsd","goarch":"amd64"},{"goos":"netbsd","goarch":"arm64"}],"assets":["f4-netbsd-amd64","f4-netbsd-arm64"]},{"name":"illumos/amd64, solaris/amd64","cells":[{"goos":"illumos","goarch":"amd64"},{"goos":"solaris","goarch":"amd64"}],"assets":["f4-illumos-amd64","f4-solaris-amd64"]}]}') }}
+    env:
+      CGO_ENABLED: 0
+      CELLS: ${{ toJSON(matrix.cells) }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: go.sum
+
+    - name: Build binaries
+      run: |
+        set -euo pipefail
+        BATCH_ROOT="$PWD/batch-output"
+        mkdir -p "$BATCH_ROOT/builds"
+
+        while IFS= read -r cell; do
+          GOOS=$(jq -r '.goos' <<<"$cell")
+          GOARCH=$(jq -r '.goarch' <<<"$cell")
+          BUILD_TAGS=$(jq -r '.build_tags // ""' <<<"$cell")
+          LIBC=$(jq -r '.libc // ""' <<<"$cell")
+          export GOOS GOARCH
+
+          CELL_KEY="${GOOS}-${GOARCH}${LIBC:+-$LIBC}"
+          BUILD_DIR="$BATCH_ROOT/builds/$CELL_KEY"
+          mkdir -p "$BUILD_DIR/plugins/dummy_internal"
+
+          EXT=""
+          if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
+
+          LDFLAGS="-s -w"
+          if [ "$GOOS" = "linux" ]; then
+            if [ "$LIBC" = "musl" ]; then
+              BUILD_TAGS="${BUILD_TAGS:+$BUILD_TAGS,}goffi_musl"
+            else
+              BUILD_TAGS="${BUILD_TAGS:+$BUILD_TAGS,}goffi_static"
+            fi
+          fi
+
+          APP_LDFLAGS="$LDFLAGS"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
+          fi
+
+          GCFLAGS=""
+          if [ "$GOOS" = "freebsd" ]; then
+            GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"
+          fi
+          if [ "$LIBC" = "musl" ]; then
+            GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/dl=-std"
+          fi
+
+          BUILD_TAG_ARGS=()
+          if [ -n "$BUILD_TAGS" ]; then
+            BUILD_TAG_ARGS=(-tags "$BUILD_TAGS")
+          fi
+
+          go build "${BUILD_TAG_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$APP_LDFLAGS" -o "$BUILD_DIR/f4$EXT" ./cmd/f4 </dev/null
+
+          if [ "$GOOS" = "windows" ]; then
+            go build "${BUILD_TAG_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$APP_LDFLAGS -H windowsgui" -o "$BUILD_DIR/f4-gui$EXT" ./cmd/f4 </dev/null
+          fi
+
+          cp -r cmd/f4/lang cmd/f4/help "$BUILD_DIR/"
+          mkdir -p "$BUILD_DIR/licenses"
+          cp plugins/visren/LICENSE.upstream "$BUILD_DIR/licenses/VisRen-BSD-3-Clause.txt"
+          cp plugins/ios/LICENSE.go-ios "$BUILD_DIR/licenses/go-ios-MIT.txt"
+
+          if [ "$GOOS" = "linux" ]; then
+            mkdir -p "$BUILD_DIR/share/applications"
+            cp packaging/linux/f4.desktop "$BUILD_DIR/share/applications/"
+            for size in 16 24 28 30 32 36 42 48 56 64 128 256 512 1024; do
+              icon_dir="$BUILD_DIR/share/icons/hicolor/${size}x${size}/apps"
+              mkdir -p "$icon_dir"
+              cp "cmd/f4/assets/icon/generated/f4-${size}.png" \
+                "$icon_dir/io.github.unxed.f4.png"
+            done
+            mkdir -p "$BUILD_DIR/share/icons/hicolor/scalable/apps"
+            cp cmd/f4/assets/icon/f4.svg \
+              "$BUILD_DIR/share/icons/hicolor/scalable/apps/io.github.unxed.f4.svg"
+          fi
+
+          (
+            cd plugins/dummy_internal
+            go build "${BUILD_TAG_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$LDFLAGS" -o "$BUILD_DIR/plugins/dummy_internal/f4-internal-dummy-plugin$EXT" . </dev/null
+          )
+        done < <(jq -c '.[]' <<<"$CELLS")
+
+    - name: Smoke test the binaries
+      run: |
+        set -euo pipefail
+        BATCH_ROOT="$PWD/batch-output"
+        QEMU_READY=no
+
+        while IFS= read -r cell; do
+          GOOS=$(jq -r '.goos' <<<"$cell")
+          GOARCH_CELL=$(jq -r '.goarch' <<<"$cell")
+          LIBC=$(jq -r '.libc // ""' <<<"$cell")
+          if [ "$GOOS" != "linux" ]; then
+            continue
+          fi
+
+          CELL_KEY="${GOOS}-${GOARCH_CELL}${LIBC:+-$LIBC}"
+          BUILD_DIR="$BATCH_ROOT/builds/$CELL_KEY"
+
+          case "$GOARCH_CELL" in
+            amd64)    QEMU=x86_64 ;;
+            386)      QEMU=i386 ;;
+            arm64)    QEMU=aarch64 ;;
+            mipsle)   QEMU=mipsel ;;
+            mips64le) QEMU=mips64el ;;
+            loong64)  QEMU=loongarch64 ;;
+            *)        QEMU="$GOARCH_CELL" ;;
+          esac
+
+          if file "$BUILD_DIR/f4" </dev/null | grep -q 'dynamically linked'; then
+            echo "::error::$GOOS/$GOARCH_CELL binary is dynamically linked; the goffi_static tag did not take effect"
+            file "$BUILD_DIR/f4" </dev/null
+            exit 1
+          fi
+
+          if [ "$QEMU_READY" != "yes" ]; then
+            sudo apt-get update -qq </dev/null
+            sudo apt-get install -y -qq qemu-user-static </dev/null
+            QEMU_READY=yes
+          fi
+          "qemu-$QEMU-static" "$BUILD_DIR/f4" --version </dev/null
+        done < <(jq -c '.[]' <<<"$CELLS")
+
+    - name: Package
+      run: |
+        set -euo pipefail
+        BATCH_ROOT="$PWD/batch-output"
+
+        while IFS= read -r cell; do
+          GOOS=$(jq -r '.goos' <<<"$cell")
+          GOARCH=$(jq -r '.goarch' <<<"$cell")
+          LIBC=$(jq -r '.libc // ""' <<<"$cell")
+          CELL_KEY="${GOOS}-${GOARCH}${LIBC:+-$LIBC}"
+          BUILD_DIR="$BATCH_ROOT/builds/$CELL_KEY"
+
+          if [ "$LIBC" = "musl" ]; then
+            ASSET="f4-linux-musl-$GOARCH"
+          else
+            ASSET="f4-$GOOS-$GOARCH"
+          fi
+          ARTIFACT_DIR="$BATCH_ROOT/artifacts/$ASSET"
+          mkdir -p "$ARTIFACT_DIR"
+
+          if [ "$GOOS" = "windows" ]; then
+            (cd "$BUILD_DIR" && zip -r "$ARTIFACT_DIR/$ASSET.zip" . </dev/null)
+          else
+            tar -czvf "$ARTIFACT_DIR/$ASSET.tar.gz" -C "$BUILD_DIR" . </dev/null
+          fi
+        done < <(jq -c '.[]' <<<"$CELLS")
+
+        expected_count=$(jq 'length' <<<"$CELLS")
+        packaged_count=$(find "$BATCH_ROOT/artifacts" -type f -name '*.tar.gz' | wc -l)
+        if [ "$packaged_count" -ne "$expected_count" ]; then
+          echo "::error::packaged $packaged_count artifacts for $expected_count batch cells"
+          exit 1
+        fi
+
+    - name: Upload artifact 1
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ matrix.assets[0] }}
+        path: batch-output/artifacts/${{ matrix.assets[0] }}/${{ matrix.assets[0] }}.*
+        retention-days: 7
+
+    - name: Upload artifact 2
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ matrix.assets[1] }}
+        path: batch-output/artifacts/${{ matrix.assets[1] }}/${{ matrix.assets[1] }}.*
+        retention-days: 7
+
+    - name: Upload artifact 3
+      if: matrix.assets[2]
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ matrix.assets[2] }}
+        path: batch-output/artifacts/${{ matrix.assets[2] }}/${{ matrix.assets[2] }}.*
+        retention-days: 7
+
   # Эта джоба собирает Windows-бинарник тулчейном thongtech/go-legacy-win7,
   # чтобы f4 можно было запускать на Windows 7/8/8.1 (см. issue #514).
   #
@@ -614,11 +759,6 @@ jobs:
   # any of its analyzers — printf, copylocks, lostcancel, loopclosure and two
   # dozen more. The build matrix already covers nine GOOS values, so vet them.
   #
-  # A matrix rather than a loop in one job: a cross-GOOS vet has to build every
-  # dependency for that target from scratch, so each cell costs about as much as
-  # a build (~75s) and running them in sequence would add ten minutes to the
-  # quality job. fail-fast is off so one broken platform does not hide the rest.
-  #
   # One cell per GOOS, plus one 32-bit cell. Only winepath_{windows,other}.go are
   # selected by GOARCH, and windows/amd64 and any non-windows target between them
   # cover both sides, so a second 64-bit arch would vet identical files. Word
@@ -638,29 +778,31 @@ jobs:
   # conversion elsewhere only moves the diagnostic. The linux run keeps the full
   # set, unsafeptr included, so a genuine round trip in portable code still
   # fails the build.
+  #
+  # Cell notes, in full-matrix cell order:
+  # - linux/arm carries goffi_static: Linux release builds use it, so vet
+  #   the files the build actually compiles -- the stubs, not the dlopen
+  #   wrappers. The only arm32 compile anywhere in a PR run, so it is the
+  #   one cell PRs keep.
+  # - linux/amd64 carries goffi_musl, which compiles the real dlopen
+  #   wrappers instead of those stubs; nothing else vets that code on
+  #   Linux. The gcflags mirror the build step (same for freebsd's
+  #   fakecgo shim below).
+  # Pull requests run only the linux/arm cell: every other target is
+  # already compiled in the same PR run by its build and test jobs (and
+  # go test runs vet's high-confidence checks natively), or -- for the
+  # BSDs/illumos/solaris -- is exotic enough to check on pushes and tags,
+  # like their builds. The full batched matrix runs everywhere else.
   vet:
-    name: Vet (${{ matrix.target }})
+    name: Vet (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # Cell notes, in full-matrix order:
-      # - linux/arm carries goffi_static: Linux release builds use it, so vet
-      #   the files the build actually compiles -- the stubs, not the dlopen
-      #   wrappers. The only arm32 compile anywhere in a PR run, so it is the
-      #   one cell PRs keep.
-      # - linux/amd64 carries goffi_musl, which compiles the real dlopen
-      #   wrappers instead of those stubs; nothing else vets that code on
-      #   Linux. The gcflags mirror the build step (same for freebsd's
-      #   fakecgo shim below).
-      # Pull requests run only the linux/arm cell: every other target is
-      # already compiled in the same PR run by its build and test jobs (and
-      # go test runs vet's high-confidence checks natively), or -- for the
-      # BSDs/illumos/solaris -- is exotic enough to check on pushes and tags,
-      # like their builds. The full matrix runs everywhere else. One long
-      # line on purpose: actionlint chews minutes on a folded variant.
-      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"target":"linux/arm","tags":"goffi_static"}]}') || fromJSON('{"include":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_musl","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/dl=-std"},{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"openbsd/amd64"},{"target":"netbsd/amd64"},{"target":"dragonfly/amd64"},{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}') }}
+      # One long line on purpose: actionlint chews minutes on a folded variant.
+      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"name":"linux/arm","cells":[{"target":"linux/arm","tags":"goffi_static"}]}]}') || fromJSON('{"include":[{"name":"windows/amd64, linux/arm, linux/amd64","cells":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_musl","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/dl=-std"}]},{"name":"darwin/arm64, freebsd/amd64, dragonfly/amd64","cells":[{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"dragonfly/amd64"}]},{"name":"openbsd/amd64, netbsd/amd64","cells":[{"target":"openbsd/amd64"},{"target":"netbsd/amd64"}]},{"name":"illumos/amd64, solaris/amd64","cells":[{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}]}') }}
     env:
       CGO_ENABLED: 0
+      CELLS: ${{ toJSON(matrix.cells) }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
@@ -674,21 +816,24 @@ jobs:
         cache-dependency-path: go.sum
 
     - name: Run go vet
-      env:
-        TARGET: ${{ matrix.target }}
-        GCFLAGS: ${{ matrix.gcflags }}
-        TAGS: ${{ matrix.tags }}
       run: |
-        # An array, so the empty GCFLAGS of most cells contributes no argument
-        # rather than an empty one.
-        flags=(-unsafeptr=false)
-        if [ -n "$GCFLAGS" ]; then
-          flags+=("$GCFLAGS")
-        fi
-        if [ -n "$TAGS" ]; then
-          flags+=(-tags "$TAGS")
-        fi
-        GOOS="${TARGET%/*}" GOARCH="${TARGET#*/}" go vet "${flags[@]}" ./...
+        set -euo pipefail
+        while IFS= read -r cell; do
+          TARGET=$(jq -r '.target' <<<"$cell")
+          GCFLAGS=$(jq -r '.gcflags // ""' <<<"$cell")
+          TAGS=$(jq -r '.tags // ""' <<<"$cell")
+
+          # An array, so the empty GCFLAGS of most cells contributes no argument
+          # rather than an empty one.
+          flags=(-unsafeptr=false)
+          if [ -n "$GCFLAGS" ]; then
+            flags+=("$GCFLAGS")
+          fi
+          if [ -n "$TAGS" ]; then
+            flags+=(-tags "$TAGS")
+          fi
+          GOOS="${TARGET%/*}" GOARCH="${TARGET#*/}" go vet "${flags[@]}" ./... </dev/null
+        done < <(jq -c '.[]' <<<"$CELLS")
 
   # Quality and Lint used to be one job; its steps ran back to back and their
   # sum (~2:40) sat right on the critical path of a PR run. Separate runners
@@ -878,9 +1023,9 @@ jobs:
       # rest of a PR run takes) and only catch arch-specific breakage --
       # rare enough to test on pushes, tags and manual runs, which is
       # also where the published artifacts come from. linux/arm64 stays
-      # everywhere: its runner is fast. Inline conditional rather than a
-      # plan-job output because these jobs are the critical path, and a
-      # needs: edge would bill its scheduling latency to every cell.
+      # everywhere: its runner is fast. Keep the conditional inline because
+      # these jobs are the critical path, and an extra dependency edge would
+      # bill its scheduling latency to every cell.
       # A-D/rest is the closest timing split after charging the A shard for
       # the isolated TestAllDialogs_LayoutValidation pass a second time.
       # The first regex also covers an exact "Test" name; the negated class
@@ -1115,11 +1260,20 @@ jobs:
             exit 0
           fi
         fi
-        go test -race -shuffle=on -timeout 15m "${packages[@]}"
+        # TestSeedSweep in tools/conptyreconcile runs 3000 seeds through the
+        # reconcile pipeline -- pure CPU work. The detector makes it roughly
+        # 7x more expensive, holding this whole job to ~7 minutes while the
+        # other ~40 packages finish in ~40s combined. The full sweep still
+        # runs in the regular non-race jobs; the race-detector pipeline remains
+        # covered by the other ConPTY tests, including
+        # TestRandomisedRoundsAgainstTheMock, TestKnownSeedsAgainstTheMock,
+        # and others.
+        go test -race -shuffle=on -timeout 15m -skip '^TestSeedSweep$' "${packages[@]}"
 
   release:
     name: Release
-    needs: [build, build-win7, test, race]
+    # Narrowing build-batch's condition would make release on a tag skipped, not failed.
+    needs: [build, build-batch, build-win7, test, race]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -1222,7 +1376,8 @@ jobs:
   # Эта джоба обновляет "плавающий" nightly релиз при каждом пуше в main
   nightly:
     name: Nightly
-    needs: [build, build-win7, test, race]
+    # Narrowing build-batch's condition would make release on a tag skipped, not failed.
+    needs: [build, build-batch, build-win7, test, race]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
